@@ -30,7 +30,7 @@ pub struct Record {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cname: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub ns: Option<Vec<String>>,
+    pub ns: Option<dns::NameServer>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ip: Option<Vec<IpAddr>>,
     #[serde(skip_serializing_if = "Option::is_none")]

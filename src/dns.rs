@@ -1,12 +1,20 @@
 use hickory_resolver::{Resolver, name_server::ConnectionProvider, proto::rr::RecordType};
+use serde::Serialize;
 use std::net::IpAddr;
 use tokio::runtime::Runtime;
+
+#[derive(Debug, Serialize)]
+pub struct NameServer {
+    pub names: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ips: Option<Vec<IpAddr>>,
+}
 
 pub fn query_ns<T: ConnectionProvider>(
     target: &str,
     io_loop: &Runtime,
     resolver: &Resolver<T>,
-) -> Option<Vec<String>> {
+) -> Option<NameServer> {
     let lookup_ns_future = resolver.lookup(target, RecordType::NS);
     match io_loop.block_on(lookup_ns_future) {
         Ok(response_ns) => {
@@ -15,10 +23,22 @@ pub fn query_ns<T: ConnectionProvider>(
                 .filter_map(|r| r.into_ns().ok())
                 .map(|name| name.to_string())
                 .collect::<Vec<_>>();
-            if ns_records.is_empty() {
-                None
+            let ns_ips = ns_records
+                .iter()
+                .map(|ns| query_ipv4_ipv6(ns, io_loop, resolver))
+                .filter_map(|ips| ips)
+                .flatten()
+                .collect::<Vec<_>>();
+            if ns_ips.is_empty() {
+                Some(NameServer {
+                    names: ns_records,
+                    ips: None,
+                })
             } else {
-                Some(ns_records)
+                Some(NameServer {
+                    names: ns_records,
+                    ips: Some(ns_ips),
+                })
             }
         }
         Err(_) => None,
