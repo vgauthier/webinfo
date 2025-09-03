@@ -3,4 +3,5 @@
 Retrive information about a given webserser 
 
 ## Todo 
-* Fix the cname 
+* Fetch info about MX
+* ~~Fix issue with tls~~

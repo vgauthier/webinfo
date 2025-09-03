@@ -1,4 +1,6 @@
+use super::{Asn, find_asn};
 use hickory_resolver::{Resolver, name_server::ConnectionProvider, proto::rr::RecordType};
+use ip2asn::IpAsnMap;
 use serde::Serialize;
 use std::net::IpAddr;
 use tokio::runtime::Runtime;
@@ -8,38 +10,45 @@ pub struct NameServer {
     pub names: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ips: Option<Vec<IpAddr>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub asn: Option<Vec<Asn>>,
 }
 
 pub fn query_ns<T: ConnectionProvider>(
     target: &str,
     io_loop: &Runtime,
     resolver: &Resolver<T>,
+    ip2asn_map: &IpAsnMap,
 ) -> Option<NameServer> {
     let lookup_ns_future = resolver.lookup(target, RecordType::NS);
     match io_loop.block_on(lookup_ns_future) {
         Ok(response_ns) => {
+            // fetch ns records
             let ns_records = response_ns
                 .into_iter()
                 .filter_map(|r| r.into_ns().ok())
                 .map(|name| name.to_string())
                 .collect::<Vec<_>>();
+            // fetch ns ips
             let ns_ips = ns_records
                 .iter()
                 .map(|ns| query_ipv4_ipv6(ns, io_loop, resolver))
                 .filter_map(|ips| ips)
                 .flatten()
                 .collect::<Vec<_>>();
-            if ns_ips.is_empty() {
-                Some(NameServer {
-                    names: ns_records,
-                    ips: None,
-                })
-            } else {
-                Some(NameServer {
-                    names: ns_records,
-                    ips: Some(ns_ips),
-                })
-            }
+            // lookup AS of NS records
+            let asn = find_asn(&ns_ips, ip2asn_map);
+
+            let ip_records = match ns_ips.is_empty() {
+                true => None,
+                false => Some(ns_ips),
+            };
+
+            Some(NameServer {
+                names: ns_records,
+                ips: ip_records,
+                asn,
+            })
         }
         Err(_) => None,
     }

@@ -6,12 +6,21 @@ use anyhow::Result;
 use hickory_resolver::{Resolver, name_server::ConnectionProvider};
 use ip_network::IpNetwork;
 use ip2asn::IpAsnMap;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::hash_map::Entry::Vacant;
 use std::{collections::HashMap, net::IpAddr};
 use tldextract::TldOption;
 use tokio::runtime::Runtime;
 use url::Url;
+
+#[derive(Deserialize, Serialize, Debug)]
+#[allow(dead_code)]
+pub struct CsvRecord {
+    pub origin: String,
+    pub popularity: u32,
+    pub date: String,
+    pub country: String,
+}
 
 #[derive(Serialize, Debug)]
 pub struct Asn {
@@ -23,10 +32,8 @@ pub struct Asn {
 
 #[derive(Serialize, Debug, Default)]
 pub struct Record {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub hostname: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub domain: Option<String>,
+    pub hostname: String,
+    pub domain: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cname: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -41,7 +48,7 @@ pub struct Record {
 
 #[derive(Serialize, Debug)]
 pub struct IpInfo {
-    pub host: String,
+    pub origin: CsvRecord,
     pub records: Record,
 }
 
@@ -87,7 +94,7 @@ fn extract_domain(url: &str) -> Option<String> {
     }
 }
 
-fn find_asn(ips: &Vec<IpAddr>, ip2asn_map: &IpAsnMap) -> Option<Vec<Asn>> {
+pub fn find_asn(ips: &Vec<IpAddr>, ip2asn_map: &IpAsnMap) -> Option<Vec<Asn>> {
     // Find the ASN for the given IP address
     let mut asn_hash: HashMap<u32, Asn> = HashMap::new();
     for ip in ips {
@@ -109,29 +116,27 @@ fn find_asn(ips: &Vec<IpAddr>, ip2asn_map: &IpAsnMap) -> Option<Vec<Asn>> {
 }
 
 pub fn query<T: ConnectionProvider>(
-    target: &str,
+    target: CsvRecord,
     io_loop: &Runtime,
     resolver: &Resolver<T>,
     ip2asn_map: &IpAsnMap,
 ) -> Result<IpInfo> {
     // Parse Hostname
-    let hostname = extract_hostname(target);
+    let hostname =
+        extract_hostname(&target.origin).ok_or_else(|| anyhow::anyhow!("Invalid hostname"))?;
     // extract TLD
-    let domain = extract_domain(target);
-    if hostname.is_none() || domain.is_none() {
-        return Err(anyhow::anyhow!("Invalid URL"));
-    }
-    let ip = dns::query_ipv4_ipv6(hostname.as_ref().unwrap(), io_loop, resolver);
-    let cname = dns::query_cname(hostname.as_ref().unwrap(), io_loop, resolver);
-    let ns = dns::query_ns(domain.as_ref().unwrap(), io_loop, resolver);
+    let domain = extract_domain(&target.origin).ok_or_else(|| anyhow::anyhow!("Invalid domain"))?;
+    let ip = dns::query_ipv4_ipv6(&hostname, io_loop, resolver);
+    let cname = dns::query_cname(&hostname, io_loop, resolver);
+    let ns = dns::query_ns(&domain, io_loop, resolver, ip2asn_map);
     let asn = if let Some(ips) = &ip {
         find_asn(ips, ip2asn_map)
     } else {
         None
     };
-    let tls = tls::retrive_cert_info(target).ok();
+    let tls = tls::retrive_cert_info(&hostname).ok();
     Ok(IpInfo {
-        host: target.to_string(),
+        origin: target,
         records: Record {
             hostname,
             domain,
