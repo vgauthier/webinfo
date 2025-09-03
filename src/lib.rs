@@ -9,7 +9,9 @@ use ip2asn::IpAsnMap;
 use serde::Serialize;
 use std::collections::hash_map::Entry::Vacant;
 use std::{collections::HashMap, net::IpAddr};
+use tldextract::TldOption;
 use tokio::runtime::Runtime;
+use url::Url;
 
 #[derive(Serialize, Debug)]
 pub struct Asn {
@@ -19,10 +21,16 @@ pub struct Asn {
     pub country_code: String,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Default)]
 pub struct Record {
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub hostname: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub domain: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub cname: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ns: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ip: Option<Vec<IpAddr>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -53,6 +61,32 @@ fn update_asn_network(asn: &mut Asn, new_network: IpNetwork) {
     }
 }
 
+fn extract_hostname(url: &str) -> Option<String> {
+    let parsed_url = Url::parse(url).ok();
+    match parsed_url {
+        Some(parsed_url) => Some(parsed_url.host_str()?.to_string()),
+        None => None,
+    }
+}
+
+fn extract_domain(url: &str) -> Option<String> {
+    let ext = TldOption::default().cache_path(".tld_cache").build();
+    match ext.extract(url) {
+        Ok(extracted) => {
+            if extracted.domain.is_none() || extracted.suffix.is_none() {
+                return None;
+            }
+            let tld = format!(
+                "{}.{}",
+                extracted.domain.unwrap(),
+                extracted.suffix.unwrap()
+            );
+            Some(tld)
+        }
+        Err(_) => None,
+    }
+}
+
 fn find_asn(ips: &Vec<IpAddr>, ip2asn_map: &IpAsnMap) -> Option<Vec<Asn>> {
     // Find the ASN for the given IP address
     let mut asn_hash: HashMap<u32, Asn> = HashMap::new();
@@ -80,8 +114,16 @@ pub fn query<T: ConnectionProvider>(
     resolver: &Resolver<T>,
     ip2asn_map: &IpAsnMap,
 ) -> Result<IpInfo> {
-    let ip = dns::query_ipv4_ipv6(target, io_loop, resolver);
-    let cname = dns::query_cname(target, io_loop, resolver);
+    // Parse Hostname
+    let hostname = extract_hostname(target);
+    // extract TLD
+    let domain = extract_domain(target);
+    if hostname.is_none() || domain.is_none() {
+        return Err(anyhow::anyhow!("Invalid URL"));
+    }
+    let ip = dns::query_ipv4_ipv6(hostname.as_ref().unwrap(), io_loop, resolver);
+    let cname = dns::query_cname(hostname.as_ref().unwrap(), io_loop, resolver);
+    let ns = dns::query_ns(domain.as_ref().unwrap(), io_loop, resolver);
     let asn = if let Some(ips) = &ip {
         find_asn(ips, ip2asn_map)
     } else {
@@ -91,7 +133,10 @@ pub fn query<T: ConnectionProvider>(
     Ok(IpInfo {
         host: target.to_string(),
         records: Record {
+            hostname,
+            domain,
             cname,
+            ns,
             ip,
             asn,
             tls,

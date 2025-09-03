@@ -2,6 +2,29 @@ use hickory_resolver::{Resolver, name_server::ConnectionProvider, proto::rr::Rec
 use std::net::IpAddr;
 use tokio::runtime::Runtime;
 
+pub fn query_ns<T: ConnectionProvider>(
+    target: &str,
+    io_loop: &Runtime,
+    resolver: &Resolver<T>,
+) -> Option<Vec<String>> {
+    let lookup_ns_future = resolver.lookup(target, RecordType::NS);
+    match io_loop.block_on(lookup_ns_future) {
+        Ok(response_ns) => {
+            let ns_records = response_ns
+                .into_iter()
+                .filter_map(|r| r.into_ns().ok())
+                .map(|name| name.to_string())
+                .collect::<Vec<_>>();
+            if ns_records.is_empty() {
+                None
+            } else {
+                Some(ns_records)
+            }
+        }
+        Err(_) => None,
+    }
+}
+
 pub fn query_cname<T: ConnectionProvider>(
     target: &str,
     io_loop: &Runtime,

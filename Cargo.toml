@@ -16,6 +16,8 @@ ip_network = { version = "0.4.1", features = ["serde"] }
 reqwest = "0.12.23"
 rustls = "0.23.31"
 serde = { version = "1.0.219", features = ["derive"] }
+tldextract = "0.6.0"
 tokio = "1.47.1"
+url = "2.5.7"
 webpki-roots = "1.0.2"
 x509-parser = "0.18.0"
