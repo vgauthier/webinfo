@@ -4,7 +4,7 @@ use std::fs::File;
 use std::path::PathBuf;
 use tokio::runtime::Runtime;
 use webinfo::{
-    CsvRecord, query,
+    OriginRecord, query,
     utils::{get_resolver, open_asn_db},
 };
 
@@ -26,7 +26,7 @@ fn main() -> Result<()> {
         File::open(csv_path).map_err(|e| anyhow::anyhow!("Failed to open CSV file: {}", e))?;
     let mut rdr = csv::Reader::from_reader(file);
     for result in rdr.deserialize() {
-        let record: CsvRecord = result?;
+        let record: OriginRecord = result?;
         let ip_info = query(record, &io_loop, &resolver, &map_ip_asn)?;
         println!("{}", serde_json::to_string_pretty(&ip_info)?);
     }

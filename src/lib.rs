@@ -1,56 +1,18 @@
-mod dns;
-mod tls;
+pub mod dns;
+pub mod model;
+pub mod tls;
 pub mod utils;
 
 use anyhow::Result;
 use hickory_resolver::{Resolver, name_server::ConnectionProvider};
 use ip_network::IpNetwork;
 use ip2asn::IpAsnMap;
-use serde::{Deserialize, Serialize};
+pub use model::*;
 use std::collections::hash_map::Entry::Vacant;
 use std::{collections::HashMap, net::IpAddr};
 use tldextract::TldOption;
 use tokio::runtime::Runtime;
 use url::Url;
-
-#[derive(Deserialize, Serialize, Debug)]
-#[allow(dead_code)]
-pub struct CsvRecord {
-    pub origin: String,
-    pub popularity: u32,
-    pub date: String,
-    pub country: String,
-}
-
-#[derive(Serialize, Debug)]
-pub struct Asn {
-    pub network: Vec<IpNetwork>,
-    pub asn: u32,
-    pub organization: String,
-    pub country_code: String,
-}
-
-#[derive(Serialize, Debug, Default)]
-pub struct Record {
-    pub hostname: String,
-    pub domain: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cname: Option<Vec<String>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub ns: Option<dns::NameServer>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub ip: Option<Vec<IpAddr>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub asn: Option<Vec<Asn>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tls: Option<tls::CertificateIssuerInfo>,
-}
-
-#[derive(Serialize, Debug)]
-pub struct IpInfo {
-    pub origin: CsvRecord,
-    pub records: Record,
-}
 
 fn update_asn(hash: &mut HashMap<u32, Asn>, new_asn: Asn) {
     if let Vacant(e) = hash.entry(new_asn.asn) {
@@ -116,7 +78,7 @@ pub fn find_asn(ips: &Vec<IpAddr>, ip2asn_map: &IpAsnMap) -> Option<Vec<Asn>> {
 }
 
 pub fn query<T: ConnectionProvider>(
-    target: CsvRecord,
+    target: OriginRecord,
     io_loop: &Runtime,
     resolver: &Resolver<T>,
     ip2asn_map: &IpAsnMap,
@@ -137,7 +99,7 @@ pub fn query<T: ConnectionProvider>(
     let tls = tls::retrive_cert_info(&hostname).ok();
     Ok(IpInfo {
         origin: target,
-        records: Record {
+        records: IpInfoRecord {
             hostname,
             domain,
             cname,
