@@ -28,7 +28,7 @@ fn main() -> Result<()> {
     for result in rdr.deserialize() {
         let record: CsvRecord = result?;
         let ip_info = query(record, &io_loop, &resolver, &map_ip_asn)?;
-        println!("IP Info: {:?}", ip_info);
+        println!("{}", serde_json::to_string_pretty(&ip_info)?);
     }
     Ok(())
 }
