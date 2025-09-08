@@ -11,7 +11,7 @@ pub struct Asn {
     pub country_code: String,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 #[allow(dead_code)]
 pub struct OriginRecord {
     pub origin: String,

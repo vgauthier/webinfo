@@ -11,7 +11,6 @@ pub use model::*;
 use std::collections::hash_map::Entry::Vacant;
 use std::{collections::HashMap, net::IpAddr};
 use tldextract::TldOption;
-use tokio::runtime::Runtime;
 use url::Url;
 
 fn update_asn(hash: &mut HashMap<u32, Asn>, new_asn: Asn) {
@@ -77,25 +76,24 @@ pub fn find_asn(ips: &Vec<IpAddr>, ip2asn_map: &IpAsnMap) -> Option<Vec<Asn>> {
     }
 }
 
-pub fn query<T: ConnectionProvider>(
+pub async fn query<T: ConnectionProvider>(
     target: OriginRecord,
-    io_loop: &Runtime,
-    resolver: &Resolver<T>,
-    ip2asn_map: &IpAsnMap,
+    resolver: Resolver<T>,
 ) -> Result<IpInfo> {
     // Parse Hostname
     let hostname =
         extract_hostname(&target.origin).ok_or_else(|| anyhow::anyhow!("Invalid hostname"))?;
     // extract TLD
     let domain = extract_domain(&target.origin).ok_or_else(|| anyhow::anyhow!("Invalid domain"))?;
-    let ip = dns::query_ipv4_ipv6(&hostname, io_loop, resolver);
-    let cname = dns::query_cname(&hostname, io_loop, resolver);
-    let ns = dns::query_ns(&domain, io_loop, resolver, ip2asn_map);
-    let asn = if let Some(ips) = &ip {
-        find_asn(ips, ip2asn_map)
-    } else {
-        None
-    };
+    let ip = dns::query_ipv4_ipv6(&hostname, &resolver);
+    let cname = dns::query_cname(&hostname, &resolver);
+    //let ns = dns::query_ns(&domain, &resolver, ip2asn_map);
+    let (ip, cname) = tokio::join!(ip, cname);
+    // let asn = if let Some(ips) = &ip {
+    //     find_asn(ips, ip2asn_map)
+    // } else {
+    //     None
+    // };
     let tls = tls::retrive_cert_info(&hostname).ok();
     Ok(IpInfo {
         origin: target,
@@ -103,9 +101,9 @@ pub fn query<T: ConnectionProvider>(
             hostname,
             domain,
             cname,
-            ns,
+            ns: None,
             ip,
-            asn,
+            asn: None, //asn,
             tls,
         },
     })
