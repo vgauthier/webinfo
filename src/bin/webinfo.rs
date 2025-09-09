@@ -19,6 +19,18 @@ struct Cli {
     csv: PathBuf,
 }
 
+fn handle_result(mut rx: mpsc::Receiver<Result<webinfo::IpInfo>>) {
+    // Handle results received from the channel
+    tokio::spawn(async move {
+        while let Some(result) = rx.recv().await {
+            match result {
+                Ok(info) => println!("{}", serde_json::to_string_pretty(&info).unwrap()),
+                Err(e) => eprintln!("Error processing record: {}", e),
+            }
+        }
+    });
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -32,32 +44,29 @@ async fn main() -> Result<()> {
     let file =
         File::open(csv_path).map_err(|e| anyhow::anyhow!("Failed to open CSV file: {}", e))?;
     let mut rdr = csv::Reader::from_reader(file);
-    let (tx, mut rx) = mpsc::channel::<Result<webinfo::IpInfo>>(2);
 
-    // Spawn a task to handle results
-    tokio::spawn(async move {
-        let mut i = 0;
-        while let Some(result) = rx.recv().await {
-            match result {
-                Ok(info) => println!("{} - {}", i, serde_json::to_string_pretty(&info).unwrap()),
-                Err(e) => eprintln!("Error processing record: {}", e),
-            }
-            i += 1;
-        }
-    });
+    // create a channel to communicate results
+    let (tx, rx) = mpsc::channel::<Result<webinfo::IpInfo>>(1000);
+
+    // spawn a task to handle results
+    handle_result(rx);
 
     // store all task handles
     let mut handles = vec![];
+
     // Process each record concurrently
     for result in rdr.deserialize() {
         let record: OriginRecord = result?;
         let r = resolver.clone();
         let s = tx.clone();
         let ip2asn_map_clone = ip2asn_map.clone();
-        let permits = Arc::clone(&permits);
+        let permits = permits.clone();
         let handle = spawn(async move {
+            // Acquire a permit before starting the task
             let _permit = permits.acquire().await;
+            // Perform the query
             let ip_info = query(record, r, ip2asn_map_clone).await;
+            // Send the result through the channel
             let _ = s.send(ip_info).await;
         });
         handles.push(handle);
