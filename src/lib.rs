@@ -2,13 +2,13 @@ pub mod dns;
 pub mod model;
 pub mod tls;
 pub mod utils;
-
 use anyhow::Result;
 use hickory_resolver::{Resolver, name_server::ConnectionProvider};
 use ip_network::IpNetwork;
 use ip2asn::IpAsnMap;
 pub use model::*;
 use std::collections::hash_map::Entry::Vacant;
+use std::sync::Arc;
 use std::{collections::HashMap, net::IpAddr};
 use tldextract::TldOption;
 use url::Url;
@@ -55,7 +55,7 @@ fn extract_domain(url: &str) -> Option<String> {
     }
 }
 
-pub fn find_asn(ips: &Vec<IpAddr>, ip2asn_map: &IpAsnMap) -> Option<Vec<Asn>> {
+pub fn find_asn(ips: &Vec<IpAddr>, ip2asn_map: &Arc<IpAsnMap>) -> Option<Vec<Asn>> {
     // Find the ASN for the given IP address
     let mut asn_hash: HashMap<u32, Asn> = HashMap::new();
     for ip in ips {
@@ -79,6 +79,7 @@ pub fn find_asn(ips: &Vec<IpAddr>, ip2asn_map: &IpAsnMap) -> Option<Vec<Asn>> {
 pub async fn query<T: ConnectionProvider>(
     target: OriginRecord,
     resolver: Resolver<T>,
+    ip2asn_map: std::sync::Arc<IpAsnMap>,
 ) -> Result<IpInfo> {
     // Parse Hostname
     let hostname =
@@ -87,13 +88,13 @@ pub async fn query<T: ConnectionProvider>(
     let domain = extract_domain(&target.origin).ok_or_else(|| anyhow::anyhow!("Invalid domain"))?;
     let ip = dns::query_ipv4_ipv6(&hostname, &resolver);
     let cname = dns::query_cname(&hostname, &resolver);
-    //let ns = dns::query_ns(&domain, &resolver, ip2asn_map);
-    let (ip, cname) = tokio::join!(ip, cname);
-    // let asn = if let Some(ips) = &ip {
-    //     find_asn(ips, ip2asn_map)
-    // } else {
-    //     None
-    // };
+    let ns = dns::query_ns(&domain, &resolver, &ip2asn_map);
+    let (ip, cname, ns) = tokio::join!(ip, cname, ns);
+    let asn = if let Some(ips) = &ip {
+        find_asn(ips, &ip2asn_map)
+    } else {
+        None
+    };
     let tls = tls::retrive_cert_info(&hostname).ok();
     Ok(IpInfo {
         origin: target,
@@ -101,9 +102,9 @@ pub async fn query<T: ConnectionProvider>(
             hostname,
             domain,
             cname,
-            ns: None,
+            ns,
             ip,
-            asn: None, //asn,
+            asn,
             tls,
         },
     })

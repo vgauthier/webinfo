@@ -4,6 +4,7 @@ use hickory_resolver::{Resolver, name_server::ConnectionProvider, proto::rr::Rec
 use ip2asn::IpAsnMap;
 use serde::Serialize;
 use std::net::IpAddr;
+use std::sync::Arc;
 
 #[derive(Debug, Serialize)]
 pub struct NameServer {
@@ -17,7 +18,7 @@ pub struct NameServer {
 pub async fn query_ns<T: ConnectionProvider>(
     target: &str,
     resolver: &Resolver<T>,
-    ip2asn_map: &IpAsnMap,
+    ip2asn_map: &Arc<IpAsnMap>,
 ) -> Option<NameServer> {
     let lookup_ns_future = resolver.lookup(target, RecordType::NS);
     match lookup_ns_future.await {
