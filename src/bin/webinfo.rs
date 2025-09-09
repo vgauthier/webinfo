@@ -4,7 +4,7 @@ use futures::future::try_join_all;
 use std::fs::File;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::sync::mpsc;
+use tokio::sync::{Semaphore, mpsc};
 use tokio::task::spawn;
 use webinfo::{
     OriginRecord, query,
@@ -26,7 +26,8 @@ async fn main() -> Result<()> {
     let map_ip_asn = open_asn_db()?;
     // Wrap the ASN map in an Arc for shared ownership
     let ip2asn_map = Arc::new(map_ip_asn);
-
+    // limiter the number of concurrent tasks
+    let permits = Arc::new(Semaphore::new(1000));
     let resolver = get_resolver();
     let file =
         File::open(csv_path).map_err(|e| anyhow::anyhow!("Failed to open CSV file: {}", e))?;
@@ -53,7 +54,9 @@ async fn main() -> Result<()> {
         let r = resolver.clone();
         let s = tx.clone();
         let ip2asn_map_clone = ip2asn_map.clone();
+        let permits = Arc::clone(&permits);
         let handle = spawn(async move {
+            let _permit = permits.acquire().await;
             let ip_info = query(record, r, ip2asn_map_clone).await;
             let _ = s.send(ip_info).await;
         });
