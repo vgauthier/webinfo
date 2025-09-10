@@ -10,7 +10,6 @@ pub use model::*;
 use std::collections::hash_map::Entry::Vacant;
 use std::sync::Arc;
 use std::{collections::HashMap, net::IpAddr};
-use tldextract::TldOption;
 use url::Url;
 
 fn update_asn(hash: &mut HashMap<u32, Asn>, new_asn: Asn) {
@@ -37,22 +36,10 @@ fn extract_hostname(url: &str) -> Option<String> {
     }
 }
 
-fn extract_domain(url: &str) -> Option<String> {
-    let ext = TldOption::default().cache_path(".tld_cache").build();
-    match ext.extract(url) {
-        Ok(extracted) => {
-            if extracted.domain.is_none() || extracted.suffix.is_none() {
-                return None;
-            }
-            let tld = format!(
-                "{}.{}",
-                extracted.domain.unwrap(),
-                extracted.suffix.unwrap()
-            );
-            Some(tld)
-        }
-        Err(_) => None,
-    }
+fn extract_domain(url: &str) -> Result<String> {
+    let domain = psl::domain_str(url)
+        .ok_or_else(|| anyhow::anyhow!("Failed to parse domain from URL: {}", url))?;
+    Ok(domain.to_owned())
 }
 
 pub fn find_asn(ips: &Vec<IpAddr>, ip2asn_map: &Arc<IpAsnMap>) -> Option<Vec<Asn>> {
@@ -82,10 +69,10 @@ pub async fn query<T: ConnectionProvider>(
     ip2asn_map: std::sync::Arc<IpAsnMap>,
 ) -> Result<IpInfo> {
     // Parse Hostname
-    let hostname =
-        extract_hostname(&target.origin).ok_or_else(|| anyhow::anyhow!("Invalid hostname"))?;
+    let hostname = extract_hostname(&target.origin)
+        .ok_or_else(|| anyhow::anyhow!("Invalid hostname: {}", target.origin))?;
     // extract TLD
-    let domain = extract_domain(&target.origin).ok_or_else(|| anyhow::anyhow!("Invalid domain"))?;
+    let domain = extract_domain(&target.origin).map_err(|e| anyhow::anyhow!("{}", e))?;
     let ip = dns::query_ipv4_ipv6(&hostname, &resolver);
     let cname = dns::query_cname(&hostname, &resolver);
     let ns = dns::query_ns(&domain, &resolver, &ip2asn_map);
@@ -97,10 +84,10 @@ pub async fn query<T: ConnectionProvider>(
     };
     let tls = tls::retrive_cert_info(&hostname).ok();
     Ok(IpInfo {
-        origin: target,
+        origin: target.clone(),
         records: IpInfoRecord {
             hostname,
-            domain,
+            domain: domain.to_string(),
             cname,
             ns,
             ip,

@@ -1,11 +1,11 @@
 use anyhow::Result;
 use clap::Parser;
 use futures::future::try_join_all;
-use std::fs::File;
-use std::path::PathBuf;
-use std::sync::Arc;
-use tokio::sync::{Semaphore, mpsc};
-use tokio::task::spawn;
+use itertools::izip;
+use std::{fs::File, iter::repeat_with, path::PathBuf, sync::Arc};
+use tokio::{sync::mpsc, task::spawn};
+use webinfo::utils::chunked;
+
 use webinfo::{
     OriginRecord, query,
     utils::{get_resolver, open_asn_db},
@@ -17,6 +17,53 @@ struct Cli {
     /// Input CSV file path
     #[arg(short, long)]
     csv: PathBuf,
+    /// Number of concurrent tasks to run
+    #[arg(short = 's', long = "size", default_value_t = 5)]
+    chunk_size: usize,
+}
+
+async fn run(
+    mut rdr: csv::Reader<File>,
+    tx: mpsc::Sender<Result<webinfo::IpInfo>>,
+    chunk_size: usize,
+) -> Result<()> {
+    // Initialize dns resolver
+    let resolver = get_resolver();
+    // Wrap the ASN map in an Arc for shared ownership
+    let ip2asn_map =
+        open_asn_db().map_err(|e| anyhow::anyhow!("Failed to open ASN database: {}", e))?;
+    let ip2asn_map = Arc::new(ip2asn_map);
+    // Implement chunking to limit the number of concurrent tasks
+    for chunk in chunked(rdr.deserialize::<OriginRecord>(), chunk_size) {
+        // store all task handles
+        let mut handles = Vec::new();
+        // Create iterators that repeat the resolver, ip2asn_map, and tx for each record in the chunk
+        let resolver_iter = repeat_with(|| resolver.clone()).take(chunk.len());
+        let ip2asn_iter = repeat_with(|| ip2asn_map.clone()).take(chunk.len());
+        let tx_iter = repeat_with(|| tx.clone()).take(chunk.len());
+        // Process each record in the chunk
+        for (record, r, ip2asn, sender) in izip!(chunk, resolver_iter, ip2asn_iter, tx_iter) {
+            let record = match record {
+                Ok(record) => record,
+                Err(e) => {
+                    eprintln!("Error processing record: {}", e);
+                    continue;
+                }
+            };
+            // Spawn a task
+            let handle = spawn(async move {
+                // Perform the query
+                let ip_info = query(record, r, ip2asn).await;
+                // Send the result through the channel
+                let _ = sender.send(ip_info).await;
+            });
+            handles.push(handle);
+        }
+
+        // Wait for the current batch of tasks to complete
+        let _ = try_join_all(handles).await?;
+    }
+    Ok(())
 }
 
 fn handle_result(mut rx: mpsc::Receiver<Result<webinfo::IpInfo>>) {
@@ -35,43 +82,17 @@ fn handle_result(mut rx: mpsc::Receiver<Result<webinfo::IpInfo>>) {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
     let csv_path = cli.csv;
-    let map_ip_asn = open_asn_db()?;
-    // Wrap the ASN map in an Arc for shared ownership
-    let ip2asn_map = Arc::new(map_ip_asn);
-    // limiter the number of concurrent tasks
-    let permits = Arc::new(Semaphore::new(1000));
-    let resolver = get_resolver();
-    let file =
-        File::open(csv_path).map_err(|e| anyhow::anyhow!("Failed to open CSV file: {}", e))?;
-    let mut rdr = csv::Reader::from_reader(file);
+    // open the CSV file
+    let rdr = csv::Reader::from_path(&csv_path)
+        .map_err(|e| anyhow::anyhow!("Failed to open CSV file: {}", e))?;
 
     // create a channel to communicate results
-    let (tx, rx) = mpsc::channel::<Result<webinfo::IpInfo>>(1000);
+    let (tx, rx) = mpsc::channel::<Result<webinfo::IpInfo>>(cli.chunk_size);
 
     // spawn a task to handle results
     handle_result(rx);
 
-    // store all task handles
-    let mut handles = vec![];
-
-    // Process each record concurrently
-    for result in rdr.deserialize() {
-        let record: OriginRecord = result?;
-        let r = resolver.clone();
-        let s = tx.clone();
-        let ip2asn_map_clone = ip2asn_map.clone();
-        let permits = permits.clone();
-        let handle = spawn(async move {
-            // Acquire a permit before starting the task
-            let _permit = permits.acquire().await;
-            // Perform the query
-            let ip_info = query(record, r, ip2asn_map_clone).await;
-            // Send the result through the channel
-            let _ = s.send(ip_info).await;
-        });
-        handles.push(handle);
-    }
-    // Wait for all tasks to complete
-    try_join_all(handles).await?;
+    // process chunk_size records concurrently
+    let _ = run(rdr, tx, cli.chunk_size).await?;
     Ok(())
 }
