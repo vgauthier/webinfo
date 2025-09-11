@@ -1,32 +1,15 @@
+mod asn;
+
 pub mod dns;
 pub mod model;
 pub mod tls;
 pub mod utils;
+
 use anyhow::Result;
 use hickory_resolver::{Resolver, name_server::ConnectionProvider};
-use ip_network::IpNetwork;
 use ip2asn::IpAsnMap;
 pub use model::*;
-use std::collections::hash_map::Entry::Vacant;
-use std::sync::Arc;
-use std::{collections::HashMap, net::IpAddr};
 use url::Url;
-
-fn update_asn(hash: &mut HashMap<u32, Asn>, new_asn: Asn) {
-    if let Vacant(e) = hash.entry(new_asn.asn) {
-        e.insert(new_asn);
-    } else if let Some(existing_asn) = hash.get_mut(&new_asn.asn) {
-        for network in new_asn.network {
-            update_asn_network(existing_asn, network);
-        }
-    }
-}
-
-fn update_asn_network(asn: &mut Asn, new_network: IpNetwork) {
-    if !asn.network.contains(&new_network) {
-        asn.network.push(new_network);
-    }
-}
 
 fn extract_hostname(url: &str) -> Option<String> {
     let parsed_url = Url::parse(url).ok();
@@ -40,27 +23,6 @@ fn extract_domain(url: &str) -> Result<String> {
     let domain = psl::domain_str(url)
         .ok_or_else(|| anyhow::anyhow!("Failed to parse domain from URL: {}", url))?;
     Ok(domain.to_owned())
-}
-
-pub fn find_asn(ips: &Vec<IpAddr>, ip2asn_map: &Arc<IpAsnMap>) -> Option<Vec<Asn>> {
-    // Find the ASN for the given IP address
-    let mut asn_hash: HashMap<u32, Asn> = HashMap::new();
-    for ip in ips {
-        if let Some(a) = ip2asn_map.lookup(*ip) {
-            let asn = Asn {
-                network: vec![a.network],
-                asn: a.asn,
-                organization: a.organization.into(),
-                country_code: a.country_code.into(),
-            };
-            update_asn(&mut asn_hash, asn);
-        }
-    }
-    if asn_hash.is_empty() {
-        None
-    } else {
-        Some(asn_hash.into_values().collect())
-    }
 }
 
 pub async fn query<T: ConnectionProvider>(
@@ -78,7 +40,7 @@ pub async fn query<T: ConnectionProvider>(
     let ns = dns::query_ns(&domain, &resolver, &ip2asn_map);
     let (ip, cname, ns) = tokio::join!(ip, cname, ns);
     let asn = if let Some(ips) = &ip {
-        find_asn(ips, &ip2asn_map)
+        asn::lookup_ip(ips, &ip2asn_map)
     } else {
         None
     };

@@ -1,15 +1,6 @@
-use super::{dns, tls};
-use ip_network::IpNetwork;
+use super::{asn::Asn, dns, tls};
 use serde::{Deserialize, Serialize};
 use std::net::IpAddr;
-
-#[derive(Serialize, Debug)]
-pub struct Asn {
-    pub network: Vec<IpNetwork>,
-    pub asn: u32,
-    pub organization: String,
-    pub country_code: String,
-}
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[allow(dead_code)]

@@ -1,4 +1,4 @@
-use super::{Asn, find_asn};
+use super::{asn::Asn, asn::lookup_ip};
 use futures::future::join_all;
 use hickory_resolver::{Resolver, name_server::ConnectionProvider, proto::rr::RecordType};
 use ip2asn::IpAsnMap;
@@ -6,7 +6,7 @@ use serde::Serialize;
 use std::net::IpAddr;
 use std::sync::Arc;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 pub struct NameServer {
     pub names: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -34,11 +34,11 @@ pub async fn query_ns<T: ConnectionProvider>(
             let parallel_results = join_all(futures).await;
             let ns_ips = parallel_results
                 .into_iter()
-                .filter_map(|res| res)
+                .flatten()
                 .flatten()
                 .collect::<Vec<_>>();
             // fetch ns asn
-            let asn = find_asn(&ns_ips, ip2asn_map);
+            let asn = lookup_ip(&ns_ips, ip2asn_map);
 
             let ip_records = match ns_ips.is_empty() {
                 true => None,
