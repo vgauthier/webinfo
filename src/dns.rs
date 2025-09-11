@@ -134,10 +134,7 @@ mod tests {
     use super::*;
     use hickory_resolver::Resolver;
     use ip2asn::Builder;
-    use std::{
-        net::{IpAddr, Ipv4Addr, Ipv6Addr},
-        vec,
-    };
+    use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
     #[tokio::test]
     async fn test_query_ipv4_some() {
@@ -150,7 +147,7 @@ mod tests {
         assert!(response.is_some());
         let mut response = response.unwrap();
         // localhost should only resolve to 127.0.0.1
-        let expected = vec![IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1))];
+        let expected = [IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1))];
         for ip in &mut response {
             assert!(expected.contains(ip));
         }
@@ -167,7 +164,7 @@ mod tests {
         assert!(response.is_some());
         let mut response = response.unwrap();
         // localhost should only resolve to ::1
-        let expected = vec![IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1))];
+        let expected = [IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1))];
         for ip in &mut response {
             assert!(expected.contains(ip));
         }
@@ -184,7 +181,7 @@ mod tests {
         assert!(response.is_some());
         let mut response = response.unwrap();
         // localhost should only resolve to 127.0.0.1 and ::1
-        let expected = vec![
+        let expected = [
             IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
             IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1)),
         ];
@@ -205,7 +202,7 @@ mod tests {
         let mut response = response.unwrap();
 
         // www.example.com should resolve to www.example.com-v4.edgesuite.net.
-        let expected = vec!["www.example.com-v4.edgesuite.net.".to_string()];
+        let expected = ["www.example.com-v4.edgesuite.net.".to_string()];
         for cname in &mut response {
             assert!(expected.contains(cname));
         }
@@ -232,7 +229,7 @@ mod tests {
         assert!(response.is_some());
         let response = response.unwrap();
         // facebook.com should resolve to a set of known NS
-        let expected_names = vec![
+        let expected_names = [
             "a.ns.facebook.com.".to_string(),
             "b.ns.facebook.com.".to_string(),
             "c.ns.facebook.com.".to_string(),
