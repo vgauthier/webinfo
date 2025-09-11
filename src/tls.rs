@@ -70,7 +70,7 @@ impl CertificateIssuerInfo {
 }
 
 fn generate_request(host: &str) -> Vec<u8> {
-    let request = concat!(
+    concat!(
         "GET / HTTP/1.1\r\n",
         "Host: {}\r\n",
         "User-Agent: rustls-client\r\n",
@@ -80,9 +80,7 @@ fn generate_request(host: &str) -> Vec<u8> {
     )
     .replace("{}", host)
     .as_bytes()
-    .to_vec();
-
-    request
+    .to_vec()
 }
 
 fn config_tls() -> Arc<rustls::ClientConfig> {
