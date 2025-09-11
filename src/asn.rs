@@ -65,3 +65,56 @@ pub fn lookup_ip(ips: &Vec<IpAddr>, ip2asn_map: &Arc<IpAsnMap>) -> Option<Vec<As
         Some(asn_hash.into_values().collect())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ip2asn::Builder;
+    use std::{
+        net::{IpAddr, Ipv4Addr},
+        sync::Arc,
+    };
+
+    #[test]
+    fn test_lookup_ip() {
+        // A small, in-memory TSV data source for the example.
+        let data = "129.134.0.0\t129.134.255.255\t32934\tUS\tFACEBOOK-AS";
+
+        // Build the map from a source that implements `io::Read`.
+        let ip2asn_map = Builder::new()
+            .with_source(data.as_bytes())
+            .unwrap()
+            .build()
+            .unwrap();
+        let ip2asn_map = Arc::new(ip2asn_map);
+
+        let ip = IpAddr::V4(Ipv4Addr::new(129, 134, 0, 1));
+        let result = lookup_ip(&vec![ip], &ip2asn_map);
+        assert!(result.is_some());
+        let asns = result.unwrap();
+        assert_eq!(asns.len(), 1);
+        assert_eq!(asns[0].asn, 32934);
+        assert_eq!(asns[0].organization, "FACEBOOK-AS");
+    }
+
+    #[test]
+    fn test_from_ip() {
+        // A small, in-memory TSV data source for the example.
+        let data = "129.134.0.0\t129.134.255.255\t32934\tUS\tFACEBOOK-AS";
+
+        // Build the map from a source that implements `io::Read`.
+        let ip2asn_map = Builder::new()
+            .with_source(data.as_bytes())
+            .unwrap()
+            .build()
+            .unwrap();
+        let ip2asn_map = Arc::new(ip2asn_map);
+
+        let ip = IpAddr::V4(Ipv4Addr::new(129, 134, 0, 1));
+        let result = Asn::from_ip(&ip, &ip2asn_map);
+        assert!(result.is_some());
+        let asn = result.unwrap();
+        assert_eq!(asn.asn, 32934);
+        assert_eq!(asn.organization, "FACEBOOK-AS");
+    }
+}
