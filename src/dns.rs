@@ -111,6 +111,7 @@ pub async fn query_ipv4<T: ConnectionProvider>(
     }
 }
 
+// need to refactor to make the two queries run in parallel
 pub async fn query_ipv4_ipv6<T: ConnectionProvider>(
     target: &str,
     resolver: &Resolver<T>,
@@ -118,132 +119,130 @@ pub async fn query_ipv4_ipv6<T: ConnectionProvider>(
     let ipv4 = query_ipv4(target, resolver);
     let ipv6 = query_ipv6(target, resolver);
     let mut ip: Vec<IpAddr> = Vec::new();
-    if let Some(v4) = ipv4.await {
+    let (ipv4, ipv6) = tokio::join!(ipv4, ipv6);
+    if let Some(v4) = ipv4 {
         ip.extend(v4);
     }
-    if let Some(v6) = ipv6.await {
+    if let Some(v6) = ipv6 {
         ip.extend(v6);
     }
     if ip.is_empty() { None } else { Some(ip) }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     use hickory_resolver::Resolver;
-//     use ip2asn::Builder;
-//     use std::{
-//         net::{IpAddr, Ipv4Addr, Ipv6Addr},
-//         vec,
-//     };
-//     use tokio::runtime::Runtime;
-//     #[test]
-//     fn test_query_ipv4() {
-//         let target = "localhost";
-//         let io_loop = Runtime::new().unwrap();
-//         // Use the host OS'es `/etc/resolv.conf`
-//         let resolver = Resolver::builder_tokio().unwrap().build();
-//         let response = query_ipv4(target, &resolver);
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hickory_resolver::Resolver;
+    use ip2asn::Builder;
+    use std::{
+        net::{IpAddr, Ipv4Addr, Ipv6Addr},
+        vec,
+    };
 
-//         // check response
-//         assert!(response.is_some());
-//         let mut response = response.unwrap();
-//         // localhost should only resolve to 127.0.0.1
-//         let expected = vec![IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1))];
-//         for ip in &mut response {
-//             assert!(expected.contains(ip));
-//         }
-//     }
+    #[tokio::test]
+    async fn test_query_ipv4_some() {
+        let target = "localhost";
+        // Use the host OS'es `/etc/resolv.conf`
+        let resolver = Resolver::builder_tokio().unwrap().build();
+        let response = query_ipv4(target, &resolver).await;
 
-//     #[test]
-//     fn test_query_ipv6() {
-//         let target = "localhost";
-//         let io_loop = Runtime::new().unwrap();
-//         // Use the host OS'es `/etc/resolv.conf`
-//         let resolver = Resolver::builder_tokio().unwrap().build();
-//         let response = query_ipv6(target, &io_loop, &resolver);
+        // check response
+        assert!(response.is_some());
+        let mut response = response.unwrap();
+        // localhost should only resolve to 127.0.0.1
+        let expected = vec![IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1))];
+        for ip in &mut response {
+            assert!(expected.contains(ip));
+        }
+    }
 
-//         // check response
-//         assert!(response.is_some());
-//         let mut response = response.unwrap();
-//         // localhost should only resolve to ::1
-//         let expected = vec![IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1))];
-//         for ip in &mut response {
-//             assert!(expected.contains(ip));
-//         }
-//     }
+    #[tokio::test]
+    async fn test_query_ipv6_some() {
+        let target = "localhost";
+        // Use the host OS'es `/etc/resolv.conf`
+        let resolver = Resolver::builder_tokio().unwrap().build();
+        let response = query_ipv6(target, &resolver).await;
 
-//     #[test]
-//     fn test_query_ipv4_ipv6() {
-//         let target = "localhost";
-//         let io_loop = Runtime::new().unwrap();
-//         // Use the host OS'es `/etc/resolv.conf`
-//         let resolver = Resolver::builder_tokio().unwrap().build();
-//         let response = query_ipv4_ipv6(target, &io_loop, &resolver);
+        // check response
+        assert!(response.is_some());
+        let mut response = response.unwrap();
+        // localhost should only resolve to ::1
+        let expected = vec![IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1))];
+        for ip in &mut response {
+            assert!(expected.contains(ip));
+        }
+    }
 
-//         // check response
-//         assert!(response.is_some());
-//         let mut response = response.unwrap();
-//         // localhost should only resolve to 127.0.0.1 and ::1
-//         let expected = vec![
-//             IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
-//             IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1)),
-//         ];
-//         for ip in &mut response {
-//             assert!(expected.contains(ip));
-//         }
-//     }
+    #[tokio::test]
+    async fn test_query_ipv4_ipv6_some() {
+        let target = "localhost";
+        // Use the host OS'es `/etc/resolv.conf`
+        let resolver = Resolver::builder_tokio().unwrap().build();
+        let response = query_ipv4_ipv6(target, &resolver).await;
 
-//     #[test]
-//     fn test_query_cname() {
-//         let target = "www.example.com";
-//         let io_loop = Runtime::new().unwrap();
-//         // Use the host OS'es `/etc/resolv.conf`
-//         let resolver = Resolver::builder_tokio().unwrap().build();
-//         let response = query_cname(target, &resolver);
+        // check response
+        assert!(response.is_some());
+        let mut response = response.unwrap();
+        // localhost should only resolve to 127.0.0.1 and ::1
+        let expected = vec![
+            IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
+            IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1)),
+        ];
+        for ip in &mut response {
+            assert!(expected.contains(ip));
+        }
+    }
 
-//         // check response
-//         assert!(response.is_some());
-//         let mut response = response.unwrap();
+    #[tokio::test]
+    async fn test_query_cname_some() {
+        let target = "www.example.com";
+        // Use the host OS'es `/etc/resolv.conf`
+        let resolver = Resolver::builder_tokio().unwrap().build();
+        let response = query_cname(target, &resolver).await;
 
-//         // www.example.com should resolve to www.example.com-v4.edgesuite.net.
-//         let expected = vec!["www.example.com-v4.edgesuite.net.".to_string()];
-//         for cname in &mut response {
-//             assert!(expected.contains(cname));
-//         }
-//     }
-//     #[test]
-//     fn test_query_ns() {
-//         let target = "facebook.com";
-//         let io_loop = Runtime::new().unwrap();
-//         // Use the host OS'es `/etc/resolv.conf`
-//         let resolver = Resolver::builder_tokio().unwrap().build();
-//         // A small, in-memory TSV data source for the example.
-//         let data = "129.134.0.0\t129.134.255.255\t32934\tUS\tFACEBOOK-AS";
+        // check response
+        assert!(response.is_some());
+        let mut response = response.unwrap();
 
-//         // Build the map from a source that implements `io::Read`.
-//         let ip2asn_map = Builder::new()
-//             .with_source(data.as_bytes())
-//             .unwrap()
-//             .build()
-//             .unwrap();
+        // www.example.com should resolve to www.example.com-v4.edgesuite.net.
+        let expected = vec!["www.example.com-v4.edgesuite.net.".to_string()];
+        for cname in &mut response {
+            assert!(expected.contains(cname));
+        }
+    }
 
-//         let response = query_ns(target, &io_loop, &resolver, &ip2asn_map);
-//         // check response
-//         assert!(response.is_some());
-//         let response = response.unwrap();
-//         // facebook.com should resolve to a set of known NS
-//         let expected_names = vec![
-//             "a.ns.facebook.com.".to_string(),
-//             "b.ns.facebook.com.".to_string(),
-//             "c.ns.facebook.com.".to_string(),
-//             "d.ns.facebook.com.".to_string(),
-//         ];
-//         for name in &response.names {
-//             assert!(expected_names.contains(name));
-//         }
-//         assert!(response.ips.is_some());
-//         let ips = response.ips.unwrap();
-//         assert_eq!(ips.len(), 8);
-//     }
-// }
+    #[tokio::test]
+    async fn test_query_ns_some() {
+        let target = "facebook.com";
+        // Use the host OS'es `/etc/resolv.conf`
+        let resolver = Resolver::builder_tokio().unwrap().build();
+        // A small, in-memory TSV data source for the example.
+        let data = "129.134.0.0\t129.134.255.255\t32934\tUS\tFACEBOOK-AS";
+
+        // Build the map from a source that implements `io::Read`.
+        let ip2asn_map = Builder::new()
+            .with_source(data.as_bytes())
+            .unwrap()
+            .build()
+            .unwrap();
+        let ip2asn_map = Arc::new(ip2asn_map);
+        // perform the query
+        let response = query_ns(target, &resolver, &ip2asn_map).await;
+        // check response
+        assert!(response.is_some());
+        let response = response.unwrap();
+        // facebook.com should resolve to a set of known NS
+        let expected_names = vec![
+            "a.ns.facebook.com.".to_string(),
+            "b.ns.facebook.com.".to_string(),
+            "c.ns.facebook.com.".to_string(),
+            "d.ns.facebook.com.".to_string(),
+        ];
+        for name in &response.names {
+            assert!(expected_names.contains(name));
+        }
+        assert!(response.ips.is_some());
+        let ips = response.ips.unwrap();
+        assert_eq!(ips.len(), 8);
+    }
+}

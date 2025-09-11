@@ -6,6 +6,10 @@ use std::{fs::File, iter::repeat_with, path::PathBuf, sync::Arc};
 use tokio::{sync::mpsc, task::spawn};
 use webinfo::utils::chunked;
 
+// Look at best pratices
+// 1. https://youtu.be/XCrZleaIUO4?si=hDRLbn3wgZ2TqRuW
+// 2. https://youtu.be/LRfDAZfo00o?si=tpwDBbNIh7Q59IvO
+// 3. https://youtu.be/93SS3VGsKx4?si=hFAIx02eNzx_Qm7D
 use webinfo::{
     OriginRecord, query,
     utils::{get_resolver, open_asn_db},
@@ -72,7 +76,7 @@ fn handle_result(mut rx: mpsc::Receiver<Result<webinfo::IpInfo>>) {
         while let Some(result) = rx.recv().await {
             match result {
                 Ok(info) => println!("{}", serde_json::to_string_pretty(&info).unwrap()),
-                Err(e) => eprintln!("Error processing record: {}", e),
+                Err(e) => eprintln!("Error when processing record: {}", e),
             }
         }
     });
@@ -93,6 +97,6 @@ async fn main() -> Result<()> {
     handle_result(rx);
 
     // process chunk_size records concurrently
-    let _ = run(rdr, tx, cli.chunk_size).await?;
+    run(rdr, tx, cli.chunk_size).await?;
     Ok(())
 }
