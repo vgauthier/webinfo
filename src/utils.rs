@@ -24,7 +24,13 @@ pub fn open_asn_db() -> Result<IpAsnMap> {
     let path = dir.join(filename);
 
     if !is_tmp_file_exists(filename) {
-        fetch_and_save_asn_db(url, &path)?;
+        fetch_and_save_asn_db(url, &path).map_err(|e| {
+            anyhow::anyhow!(
+                "Failed to fetch ASN database from {}: {}",
+                url,
+                e.to_string()
+            )
+        })?;
         println!("ASN database fetched successfully.");
     }
     println!("Loading ASN database from {}", path.display());
