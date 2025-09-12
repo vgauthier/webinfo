@@ -3,39 +3,32 @@ use hickory_resolver::{Resolver, config::ResolverConfig, name_server::TokioConne
 use ip2asn::{Builder, IpAsnMap};
 use std::{env, fs::File, io, path::Path};
 
-fn is_asn_file_exists() -> bool {
+fn is_tmp_file_exists(filename: &str) -> bool {
     let dir = env::temp_dir();
-    Path::new(dir.join("ip2asn-combined.tsv.gz").as_os_str()).exists()
+    Path::new(dir.join(filename).as_os_str()).exists()
 }
 
-fn fetch_asn_db(url: &str) -> Result<()> {
-    let dir = env::temp_dir();
+fn fetch_and_save_asn_db(url: &str, path: &Path) -> Result<()> {
     let mut response = reqwest::blocking::get(url)?;
-    let mut dest = File::create(dir.join("ip2asn-combined.tsv.gz"))?;
-    io::copy(&mut response, &mut dest)?;
-    println!(
-        "Downloaded ASN database to {}",
-        dir.join("ip2asn-combined.tsv.gz").display()
-    );
+    let mut dest = File::create(path)?;
+    io::copy(&mut response, &mut dest)
+        .map_err(|e| anyhow::anyhow!("Failed to save ASN database: {}", e))?;
+    println!("Downloaded ASN database to {}", path.display());
     Ok(())
 }
 
 pub fn open_asn_db() -> Result<IpAsnMap> {
+    let filename = "ip2asn-combined.tsv.gz";
+    let url = "https://iptoasn.com/data/ip2asn-combined.tsv.gz";
     let dir = env::temp_dir();
-    if !is_asn_file_exists() {
-        let url = "https://iptoasn.com/data/ip2asn-combined.tsv.gz";
-        fetch_asn_db(url)?;
+    let path = dir.join(filename);
+
+    if !is_tmp_file_exists(filename) {
+        fetch_and_save_asn_db(url, &path)?;
         println!("ASN database fetched successfully.");
     }
-    println!(
-        "Loading ASN database from {}",
-        dir.join("ip2asn-combined.tsv.gz").display()
-    );
-
-    let ipasn = Builder::new()
-        .from_path(dir.join("ip2asn-combined.tsv.gz"))?
-        .build()?;
-
+    println!("Loading ASN database from {}", path.display());
+    let ipasn = Builder::new().from_path(path)?.build()?;
     Ok(ipasn)
 }
 
@@ -59,4 +52,23 @@ pub fn chunked<I>(
     std::iter::from_fn(move || {
         Some(a.by_ref().take(chunk_size).collect()).filter(|chunk: &Vec<_>| !chunk.is_empty())
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_chunked() {
+        let data = vec![1, 2, 3, 4, 5, 6, 7];
+        let chunk_size = 3;
+        let chunks: Vec<Vec<i32>> = chunked(data, chunk_size).collect();
+        assert_eq!(chunks, vec![vec![1, 2, 3], vec![4, 5, 6], vec![7]]);
+    }
+
+    #[test]
+    fn test_open_asn_db() {
+        let result = open_asn_db();
+        assert!(result.is_ok());
+    }
 }
