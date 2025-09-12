@@ -74,7 +74,10 @@ mod tests {
 
     #[test]
     fn test_open_asn_db() {
-        let result = open_asn_db();
-        assert!(result.is_ok());
+        let result_fetch = open_asn_db();
+        assert!(result_fetch.is_ok());
+        // test if the temp file exists
+        let result_tmp = open_asn_db();
+        assert!(result_tmp.is_ok());
     }
 }
