@@ -28,3 +28,13 @@ jobs:
         run: cargo test --verbose
       - name: Clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
+      - name: Code coverage
+        if: matrix.toolchain == 'stable'
+        run: cargo install cargo-tarpaulin && cargo tarpaulin --out Xml --engine llvm --skip-clean
+      - name: Upload coverage to Codecov
+        if: matrix.toolchain == 'stable'
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: vgauthier/webinfo
+          fail_ci_if_error: true
