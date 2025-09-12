@@ -136,3 +136,19 @@ pub fn retrive_cert_info(domain_name: &str) -> Result<CertificateIssuerInfo> {
     // Extract the root CA from the CA list and collect the organization and country
     CertificateIssuerInfo::from_der(certs)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_retrive_cert_info() {
+        let domain = "www.google.com";
+        let cert_info = retrive_cert_info(domain);
+        assert!(cert_info.is_ok());
+        let cert_info = cert_info.unwrap();
+        print!("{:?}", cert_info);
+        assert_eq!(cert_info.organization(), "GlobalSign nv-sa");
+        assert_eq!(cert_info.country(), "BE");
+    }
+}
