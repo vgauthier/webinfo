@@ -1,3 +1,5 @@
+[![codecov](https://codecov.io/github/vgauthier/webinfo/graph/badge.svg?token=l1QTyO4xjx)](https://codecov.io/github/vgauthier/webinfo)
+
 # Webinfo
 
 Retrive information about a given webserser 
