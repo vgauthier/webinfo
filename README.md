@@ -1,3 +1,4 @@
+[![Rust CI](https://github.com/vgauthier/webinfo/actions/workflows/ci.yml/badge.svg)](https://github.com/vgauthier/webinfo/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/github/vgauthier/webinfo/graph/badge.svg?token=l1QTyO4xjx)](https://codecov.io/github/vgauthier/webinfo)
 
 # Webinfo
