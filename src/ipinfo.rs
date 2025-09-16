@@ -92,6 +92,7 @@ fn extract_domain(url: &str) -> Result<String> {
 mod tests {
     use super::*;
     use crate::utils::{get_resolver, open_asn_db};
+
     #[test]
     fn test_extract_hostname() {
         let url = "https://www.example.com/path?query=param";
@@ -121,7 +122,8 @@ mod tests {
             date: "2023-10-01".to_string(),
             country: "US".to_string(),
         };
-        let resolver = get_resolver();
+        // Use the host OS'es `/etc/resolv.conf`
+        let resolver = Resolver::builder_tokio().unwrap().build();
         let ip2asn_map = std::sync::Arc::new(open_asn_db().unwrap());
         let ip_info = IpInfo::from_record(origin, resolver, ip2asn_map)
             .await
