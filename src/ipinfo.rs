@@ -91,7 +91,7 @@ fn extract_domain(url: &str) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils::open_asn_db;
+    //use crate::utils::open_asn_db;
 
     #[test]
     fn test_extract_hostname() {
