@@ -11,7 +11,8 @@ use webinfo::utils::chunked;
 // 2. https://youtu.be/LRfDAZfo00o?si=tpwDBbNIh7Q59IvO
 // 3. https://youtu.be/93SS3VGsKx4?si=hFAIx02eNzx_Qm7D
 use webinfo::{
-    OriginRecord, query,
+    IpInfo,
+    ipinfo::OriginRecord,
     utils::{get_resolver, open_asn_db},
 };
 
@@ -57,7 +58,7 @@ async fn run(
             // Spawn a task
             let handle = spawn(async move {
                 // Perform the query
-                let ip_info = query(record, r, ip2asn).await;
+                let ip_info = IpInfo::from_record(record, r, ip2asn).await;
                 // Send the result through the channel
                 let _ = sender.send(ip_info).await;
             });
