@@ -113,23 +113,20 @@ mod tests {
         assert!(domain.is_err());
     }
 
-    #[test]
-    fn test_from_record() {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async {
-            let origin = OriginRecord {
-                origin: "https://www.example.com".to_string(),
-                popularity: 100,
-                date: "2023-10-01".to_string(),
-                country: "US".to_string(),
-            };
-            let resolver = get_resolver();
-            let ip2asn_map = std::sync::Arc::new(open_asn_db().unwrap());
-            let ip_info = IpInfo::from_record(origin, resolver, ip2asn_map)
-                .await
-                .unwrap();
-            assert_eq!(ip_info.records.hostname, "www.example.com");
-            assert_eq!(ip_info.records.domain, "example.com");
-        });
+    #[tokio::test]
+    async fn test_from_record() {
+        let origin = OriginRecord {
+            origin: "https://www.example.com".to_string(),
+            popularity: 100,
+            date: "2023-10-01".to_string(),
+            country: "US".to_string(),
+        };
+        let resolver = get_resolver();
+        let ip2asn_map = std::sync::Arc::new(open_asn_db().unwrap());
+        let ip_info = IpInfo::from_record(origin, resolver, ip2asn_map)
+            .await
+            .unwrap();
+        assert_eq!(ip_info.records.hostname, "www.example.com");
+        assert_eq!(ip_info.records.domain, "example.com");
     }
 }
