@@ -48,7 +48,7 @@ impl IpInfo {
         let hostname = extract_hostname(&target.origin)
             .ok_or_else(|| anyhow::anyhow!("Invalid hostname: {}", target.origin))?;
         // extract TLD
-        let domain = extract_domain(&target.origin).map_err(|e| anyhow::anyhow!("{}", e))?;
+        let domain = extract_domain(&hostname).map_err(|e| anyhow::anyhow!("{}", e))?;
         let ip = dns::query_ipv4_ipv6(&hostname, &resolver);
         let cname = dns::query_cname(&hostname, &resolver);
         let ns = dns::query_ns(&domain, &resolver, &ip2asn_map);
@@ -63,7 +63,7 @@ impl IpInfo {
             origin: target.clone(),
             records: IpInfoRecord {
                 hostname,
-                domain: domain.to_string(),
+                domain,
                 cname,
                 ns,
                 ip,
@@ -86,4 +86,50 @@ fn extract_domain(url: &str) -> Result<String> {
     let domain = psl::domain_str(url)
         .ok_or_else(|| anyhow::anyhow!("Failed to parse domain from URL: {}", url))?;
     Ok(domain.to_owned())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::utils::{get_resolver, open_asn_db};
+    #[test]
+    fn test_extract_hostname() {
+        let url = "https://www.example.com/path?query=param";
+        let hostname = extract_hostname(url);
+        assert_eq!(hostname, Some("www.example.com".to_string()));
+    }
+
+    #[test]
+    fn test_extract_domain() {
+        let url = "www.example.co.uk";
+        let domain = extract_domain(url).unwrap();
+        assert_eq!(domain, "example.co.uk".to_string());
+    }
+
+    #[test]
+    fn test_extract_domain_invalid() {
+        let url = "invalid_domain";
+        let domain = extract_domain(url);
+        assert!(domain.is_err());
+    }
+
+    #[test]
+    fn test_from_record() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            let origin = OriginRecord {
+                origin: "https://www.example.com".to_string(),
+                popularity: 100,
+                date: "2023-10-01".to_string(),
+                country: "US".to_string(),
+            };
+            let resolver = get_resolver();
+            let ip2asn_map = std::sync::Arc::new(open_asn_db().unwrap());
+            let ip_info = IpInfo::from_record(origin, resolver, ip2asn_map)
+                .await
+                .unwrap();
+            assert_eq!(ip_info.records.hostname, "www.example.com");
+            assert_eq!(ip_info.records.domain, "example.com");
+        });
+    }
 }
