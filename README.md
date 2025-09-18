@@ -8,6 +8,7 @@ Retrive information about a given webserser
 
 ## Todo 
 * Fetch info about MX
+* add option to create a ip list of dns server
 * ~~clean code~~ 
 * ~~Fix issue with tls~~
 * ~~print json output to stdout~~

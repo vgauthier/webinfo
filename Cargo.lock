@@ -2648,6 +2648,7 @@ dependencies = [
  "clap",
  "csv",
  "futures",
+ "hickory-proto",
  "hickory-resolver",
  "ip2asn",
  "ip_network",

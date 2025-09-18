@@ -1,6 +1,13 @@
 use anyhow::Result;
-use hickory_resolver::{Resolver, name_server::TokioConnectionProvider};
+use hickory_proto::rr::domain::Name;
+use hickory_proto::xfer::Protocol;
+use hickory_resolver::{
+    Resolver, config::NameServerConfig, config::ResolverConfig,
+    name_server::TokioConnectionProvider,
+};
 use ip2asn::{Builder, IpAsnMap};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::str::FromStr;
 use std::{env, fs::File, io, path::Path};
 
 fn is_tmp_file_exists(filename: &str) -> bool {
@@ -45,7 +52,12 @@ pub fn get_resolver() -> Resolver<TokioConnectionProvider> {
     //     TokioConnectionProvider::default(),
     // )
     // .build()
-    Resolver::builder_tokio().unwrap().build()
+    let ip: IpAddr = "1.1.1.1".parse().unwrap();
+    let socket_addr = SocketAddr::new(ip, 53);
+    let name_server_config = NameServerConfig::new(socket_addr, Protocol::Udp);
+    let name = Name::from_str("www.luxbulb.org.").unwrap();
+    let resolver_config = ResolverConfig::from_parts(Some(name), vec![], vec![name_server_config]);
+    Resolver::builder_with_config(resolver_config, TokioConnectionProvider::default()).build()
 }
 
 /// Break an iterator into chunks of a specified size
