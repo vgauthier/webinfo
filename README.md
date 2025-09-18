@@ -1,5 +1,6 @@
 [![Rust CI](https://github.com/vgauthier/webinfo/actions/workflows/ci.yml/badge.svg)](https://github.com/vgauthier/webinfo/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/github/vgauthier/webinfo/graph/badge.svg?token=l1QTyO4xjx)](https://codecov.io/github/vgauthier/webinfo)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 # Webinfo
 
