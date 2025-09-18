@@ -1,5 +1,5 @@
 use anyhow::Result;
-use hickory_resolver::{Resolver, config::ResolverConfig, name_server::TokioConnectionProvider};
+use hickory_resolver::{Resolver, name_server::TokioConnectionProvider};
 use ip2asn::{Builder, IpAsnMap};
 use std::{env, fs::File, io, path::Path};
 
@@ -40,11 +40,12 @@ pub async fn open_asn_db() -> Result<IpAsnMap> {
 }
 
 pub fn get_resolver() -> Resolver<TokioConnectionProvider> {
-    Resolver::builder_with_config(
-        ResolverConfig::cloudflare(),
-        TokioConnectionProvider::default(),
-    )
-    .build()
+    // Resolver::builder_with_config(
+    //     ResolverConfig::cloudflare(),
+    //     TokioConnectionProvider::default(),
+    // )
+    // .build()
+    Resolver::builder_tokio().unwrap().build()
 }
 
 /// Break an iterator into chunks of a specified size

@@ -77,7 +77,10 @@ fn handle_result(mut rx: mpsc::Receiver<Result<webinfo::IpInfo>>) {
     tokio::spawn(async move {
         while let Some(result) = rx.recv().await {
             match result {
-                Ok(info) => println!("{}", serde_json::to_string_pretty(&info).unwrap()),
+                Ok(info) => {
+                    print!("{}", serde_json::to_string_pretty(&info).unwrap());
+                    println!(",")
+                }
                 Err(e) => eprintln!("Error when processing record: {}", e),
             }
         }

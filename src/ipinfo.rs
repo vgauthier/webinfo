@@ -18,7 +18,8 @@ pub struct OriginRecord {
 #[derive(Serialize, Debug, Default)]
 pub struct IpInfoRecord {
     pub hostname: String,
-    pub domain: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub domain: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cname: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -48,11 +49,20 @@ impl IpInfo {
         let hostname = extract_hostname(&target.origin)
             .ok_or_else(|| anyhow::anyhow!("Invalid hostname: {}", target.origin))?;
         // extract TLD
-        let domain = extract_domain(&hostname).map_err(|e| anyhow::anyhow!("{}", e))?;
+        let domain = extract_domain(&target.origin).ok();
+        if domain.is_none() {
+            eprintln!(
+                "Warning: Could not extract domain from hostname: {}",
+                hostname
+            );
+        }
         let ip = dns::query_ipv4_ipv6(&hostname, &resolver);
         let cname = dns::query_cname(&hostname, &resolver);
-        let ns = dns::query_ns(&domain, &resolver, &ip2asn_map);
-        let (ip, cname, ns) = tokio::join!(ip, cname, ns);
+        let ns = match &domain {
+            Some(domain) => dns::query_ns(domain, &resolver, &ip2asn_map).await,
+            None => None,
+        };
+        let (ip, cname) = tokio::join!(ip, cname);
         let asn = if let Some(ips) = &ip {
             asn::lookup_ip(ips, &ip2asn_map)
         } else {
@@ -105,6 +115,9 @@ mod tests {
         let url = "www.example.co.uk";
         let domain = extract_domain(url).unwrap();
         assert_eq!(domain, "example.co.uk".to_string());
+        // let url = "carrd.co";
+        // let domain = extract_domain(url).unwrap();
+        // assert_eq!(domain, "carrd.co".to_string());
     }
 
     #[test]
@@ -128,7 +141,8 @@ mod tests {
         let ip2asn_map = Arc::new(ip2asn_map);
         let ip_info = IpInfo::from_record(origin, resolver, ip2asn_map.clone()).await;
         assert!(ip_info.is_ok());
-        //assert_eq!(ip_info.records.hostname, "www.example.com");
+        let ip_info = ip_info.unwrap();
+        assert_eq!(ip_info.records.hostname, "www.example.com");
         //assert_eq!(ip_info.records.domain, "example.com");
     }
 }
