@@ -80,4 +80,28 @@ mod tests {
         let result_tmp = open_asn_db();
         assert!(result_tmp.is_ok());
     }
+
+    #[test]
+    fn test_fetch_and_save_asn_db() {
+        let filename = "test_ip2asn-combined.tsv.gz";
+        let url = "https://iptoasn.com/data/ip2asn-combined.tsv.gz";
+        let dir = env::temp_dir();
+        let path = dir.join(filename);
+        // Remove the file if it exists
+        if is_tmp_file_exists(filename) {
+            std::fs::remove_file(&path).unwrap();
+        }
+        let result = fetch_and_save_asn_db(url, &path);
+        assert!(result.is_ok());
+        assert!(is_tmp_file_exists(filename));
+        // Clean up
+        std::fs::remove_file(&path).unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_get_resolver() {
+        let resolver = get_resolver();
+        let response = resolver.lookup_ip("example.com").await;
+        assert!(response.is_ok());
+    }
 }
