@@ -34,6 +34,7 @@ pub fn open_asn_db() -> Result<IpAsnMap> {
         println!("ASN database fetched successfully.");
     }
     println!("Loading ASN database from {}", path.display());
+    // Build the IpAsnMap lookup table
     let ipasn = Builder::new().from_path(path)?.build()?;
     Ok(ipasn)
 }

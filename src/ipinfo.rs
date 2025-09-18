@@ -3,7 +3,7 @@ use anyhow::Result;
 use hickory_resolver::{Resolver, name_server::ConnectionProvider};
 use ip2asn::IpAsnMap;
 use serde::{Deserialize, Serialize};
-use std::net::IpAddr;
+use std::{net::IpAddr, sync::Arc};
 use url::Url;
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -42,7 +42,7 @@ impl IpInfo {
     pub async fn from_record<T: ConnectionProvider>(
         target: OriginRecord,
         resolver: Resolver<T>,
-        ip2asn_map: std::sync::Arc<IpAsnMap>,
+        ip2asn_map: Arc<IpAsnMap>,
     ) -> Result<IpInfo> {
         // Parse Hostname
         let hostname = extract_hostname(&target.origin)
@@ -91,7 +91,8 @@ fn extract_domain(url: &str) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    //use crate::utils::open_asn_db;
+    use crate::utils::open_asn_db;
+    use tokio::task::spawn;
 
     #[test]
     fn test_extract_hostname() {
@@ -114,20 +115,24 @@ mod tests {
         assert!(domain.is_err());
     }
 
-    // #[tokio::test]
-    // async fn test_from_record() {
-    //     let origin = OriginRecord {
-    //         origin: "https://www.example.com".to_string(),
-    //         popularity: 100,
-    //         date: "2023-10-01".to_string(),
-    //         country: "US".to_string(),
-    //     };
-    //     // Use the host OS'es `/etc/resolv.conf`
-    //     let resolver = Resolver::builder_tokio().unwrap().build();
-    //     let ip2asn_map = std::sync::Arc::new(open_asn_db().unwrap());
-    //     let ip_info = IpInfo::from_record(origin, resolver, ip2asn_map).await;
-    //     assert!(ip_info.is_ok());
-    //     //assert_eq!(ip_info.records.hostname, "www.example.com");
-    //     //assert_eq!(ip_info.records.domain, "example.com");
-    // }
+    #[tokio::test]
+    async fn test_from_record() {
+        let origin = OriginRecord {
+            origin: "https://www.example.com".to_string(),
+            popularity: 100,
+            date: "2023-10-01".to_string(),
+            country: "US".to_string(),
+        };
+        // Use the host OS'es `/etc/resolv.conf`
+        let resolver = Resolver::builder_tokio().unwrap().build();
+        let ip2asn_map = open_asn_db().unwrap();
+        let ip2asn_map = Arc::new(ip2asn_map);
+        let res = spawn(async move {
+            let ip_info = IpInfo::from_record(origin, resolver, ip2asn_map.clone()).await;
+            ip_info
+        });
+        assert!(res.await.is_ok());
+        //assert_eq!(ip_info.records.hostname, "www.example.com");
+        //assert_eq!(ip_info.records.domain, "example.com");
+    }
 }
