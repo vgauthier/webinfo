@@ -35,8 +35,9 @@ async fn run(
     // Initialize dns resolver
     let resolver = get_resolver();
     // Wrap the ASN map in an Arc for shared ownership
-    let ip2asn_map =
-        open_asn_db().map_err(|e| anyhow::anyhow!("Failed to open ASN database: {}", e))?;
+    let ip2asn_map = open_asn_db()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to open ASN database: {}", e))?;
     let ip2asn_map = Arc::new(ip2asn_map);
     // Implement chunking to limit the number of concurrent tasks
     for chunk in chunked(rdr.deserialize::<OriginRecord>(), chunk_size) {

@@ -92,7 +92,6 @@ fn extract_domain(url: &str) -> Result<String> {
 mod tests {
     use super::*;
     use crate::utils::open_asn_db;
-    use tokio::task::spawn;
 
     #[test]
     fn test_extract_hostname() {
@@ -125,13 +124,10 @@ mod tests {
         };
         // Use the host OS'es `/etc/resolv.conf`
         let resolver = Resolver::builder_tokio().unwrap().build();
-        let ip2asn_map = open_asn_db().unwrap();
+        let ip2asn_map = open_asn_db().await.unwrap();
         let ip2asn_map = Arc::new(ip2asn_map);
-        let res = spawn(async move {
-            let ip_info = IpInfo::from_record(origin, resolver, ip2asn_map.clone()).await;
-            ip_info
-        });
-        assert!(res.await.is_ok());
+        let ip_info = IpInfo::from_record(origin, resolver, ip2asn_map.clone()).await;
+        assert!(ip_info.is_ok());
         //assert_eq!(ip_info.records.hostname, "www.example.com");
         //assert_eq!(ip_info.records.domain, "example.com");
     }
