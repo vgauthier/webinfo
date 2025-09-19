@@ -25,15 +25,19 @@ struct Cli {
     /// Number of concurrent tasks to run
     #[arg(short = 's', long = "size", default_value_t = 5)]
     chunk_size: usize,
+    /// Custom DNS server IP addresses (comma-separated)
+    #[arg(short = 'd', long = "dns")]
+    dns: Option<String>,
 }
 
 async fn run(
     mut rdr: csv::Reader<File>,
     tx: mpsc::Sender<Result<webinfo::IpInfo>>,
     chunk_size: usize,
+    custom_dns: Option<String>,
 ) -> Result<()> {
     // Initialize dns resolver
-    let resolver = get_resolver(None)
+    let resolver = get_resolver(custom_dns)
         .map_err(|_| anyhow::anyhow!("Failed to create DNS resolver with default configuration"))?;
     // Wrap the ASN map in an Arc for shared ownership
     let ip2asn_map = open_asn_db()
@@ -103,6 +107,6 @@ async fn main() -> Result<()> {
     handle_result(rx);
 
     // process chunk_size records concurrently
-    run(rdr, tx, cli.chunk_size).await?;
+    run(rdr, tx, cli.chunk_size, cli.dns).await?;
     Ok(())
 }

@@ -53,6 +53,16 @@ pub fn parse_ip_list(ip_list: &str) -> Vec<IpAddr> {
         .collect()
 }
 
+pub fn get_dns_config_from_ips(dns_ips: &[IpAddr]) -> Vec<NameServerConfig> {
+    dns_ips
+        .iter()
+        .map(|&ip| {
+            let socket_addr = SocketAddr::new(ip, 53);
+            NameServerConfig::new(socket_addr, Protocol::Udp)
+        })
+        .collect()
+}
+
 pub fn get_default_dns_config() -> Result<Resolver<TokioConnectionProvider>> {
     let ip: IpAddr = "1.1.1.1".parse()?;
     let socket_addr = SocketAddr::new(ip, 53);
@@ -67,27 +77,24 @@ pub fn get_default_dns_config() -> Result<Resolver<TokioConnectionProvider>> {
 pub fn get_resolver(custom_dns: Option<String>) -> Result<Resolver<TokioConnectionProvider>> {
     if custom_dns.is_some() {
         let dns_ips = parse_ip_list(&custom_dns.unwrap());
-        if dns_ips.is_empty() {
-            return Err(anyhow::anyhow!(
-                "No valid IP addresses found in custom DNS server list."
-            ));
-        } else {
-            let dns_config = dns_ips
-                .iter()
-                .map(|ip| {
-                    let socket_addr = SocketAddr::new(*ip, 53);
-                    NameServerConfig::new(socket_addr, Protocol::Udp)
-                })
-                .collect::<Vec<NameServerConfig>>();
-            let name = Name::from_str("www.luxbulb.org.")?;
+        if !dns_ips.is_empty() {
+            eprintln!("Resolution using custom DNS servers: {:?}", dns_ips);
+            let dns_config = get_dns_config_from_ips(&dns_ips);
+            let name = Name::from_str("luxbulb.org.")?;
             let resolver_config = ResolverConfig::from_parts(Some(name), vec![], dns_config);
             return Ok(Resolver::builder_with_config(
                 resolver_config,
                 TokioConnectionProvider::default(),
             )
             .build());
+        } else {
+            // If parsing failed or no valid IPs, fallback to default
+            eprintln!("Resolution using default DNS servers: 1.1.1.1");
+            return get_default_dns_config();
         }
     } else {
+        // Use default Cloudflare DNS configuration
+        eprintln!("Resolution using default DNS servers: 1.1.1.1");
         get_default_dns_config()
     }
 }
@@ -109,7 +116,8 @@ pub fn chunked<I>(
 #[cfg(test)]
 mod tests {
     use super::*;
-
+    use std::net::Ipv4Addr;
+    use std::net::SocketAddr;
     #[test]
     fn test_chunked() {
         let data = vec![1, 2, 3, 4, 5, 6, 7];
@@ -147,7 +155,29 @@ mod tests {
     #[tokio::test]
     async fn test_get_resolver() {
         let resolver = get_resolver(None).unwrap();
+        // Default should be Cloudflare
+        assert_eq!(
+            resolver.config().name_servers()[0].socket_addr,
+            SocketAddr::from(([1, 1, 1, 1], 53))
+        );
         let response = resolver.lookup_ip("example.com").await;
         assert!(response.is_ok());
+    }
+
+    #[test]
+    fn test_parse_ip_list() {
+        let ip_list = "1.1.1.1, 8.8.8.8, 8.8.4.4";
+        let parsed_ips = parse_ip_list(ip_list);
+        assert_eq!(parsed_ips.len(), 3);
+        assert_eq!(parsed_ips[0], Ipv4Addr::new(1, 1, 1, 1));
+        assert_eq!(parsed_ips[1], Ipv4Addr::new(8, 8, 8, 8));
+        assert_eq!(parsed_ips[2], Ipv4Addr::new(8, 8, 4, 4));
+    }
+
+    #[test]
+    fn test_parse_ip_list_with_error() {
+        let ip_list = "1.1.";
+        let parsed_ips = parse_ip_list(ip_list);
+        assert_eq!(parsed_ips.len(), 0);
     }
 }
