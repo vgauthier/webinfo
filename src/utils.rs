@@ -75,8 +75,8 @@ pub fn get_default_dns_config() -> Result<Resolver<TokioConnectionProvider>> {
 /// Create a DNS resolver using Cloudflare's DNS server by default
 /// or a custom DNS server if arguments is provided.
 pub fn get_resolver(custom_dns: Option<String>) -> Result<Resolver<TokioConnectionProvider>> {
-    if custom_dns.is_some() {
-        let dns_ips = parse_ip_list(&custom_dns.unwrap());
+    if let Some(custom_dns) = custom_dns {
+        let dns_ips = parse_ip_list(&custom_dns);
         if !dns_ips.is_empty() {
             eprintln!("Resolution using custom DNS servers: {:?}", dns_ips);
             let dns_config = get_dns_config_from_ips(&dns_ips);
