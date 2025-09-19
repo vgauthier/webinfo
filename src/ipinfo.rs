@@ -93,6 +93,11 @@ fn extract_hostname(url: &str) -> Option<String> {
 }
 
 fn extract_domain(url: &str) -> Result<String> {
+    // Count the number of dots in the URL to handle single-label domains
+    let ndots = url.chars().filter(|c| *c == '.').count();
+    if ndots == 1 {
+        return Ok(url.to_owned());
+    }
     let domain = psl::domain_str(url)
         .ok_or_else(|| anyhow::anyhow!("Failed to parse domain from URL: {}", url))?;
     Ok(domain.to_owned())
@@ -115,9 +120,10 @@ mod tests {
         let url = "www.example.co.uk";
         let domain = extract_domain(url).unwrap();
         assert_eq!(domain, "example.co.uk".to_string());
-        // let url = "carrd.co";
-        // let domain = extract_domain(url).unwrap();
-        // assert_eq!(domain, "carrd.co".to_string());
+
+        let url = "carrd.co";
+        let domain = extract_domain(url).unwrap();
+        assert_eq!(domain, "carrd.co".to_string());
     }
 
     #[test]
@@ -143,6 +149,6 @@ mod tests {
         assert!(ip_info.is_ok());
         let ip_info = ip_info.unwrap();
         assert_eq!(ip_info.records.hostname, "www.example.com");
-        //assert_eq!(ip_info.records.domain, "example.com");
+        assert_eq!(ip_info.records.domain, "example.com".to_string().into());
     }
 }

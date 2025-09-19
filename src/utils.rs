@@ -76,6 +76,7 @@ pub fn get_default_dns_config() -> Result<Resolver<TokioConnectionProvider>> {
 /// or a custom DNS server if arguments is provided.
 pub fn get_resolver(custom_dns: Option<String>) -> Result<Resolver<TokioConnectionProvider>> {
     if let Some(custom_dns) = custom_dns {
+        // change to ips_from_str to parse_ip_list
         let dns_ips = parse_ip_list(&custom_dns);
         if !dns_ips.is_empty() {
             eprintln!("Resolution using custom DNS servers: {:?}", dns_ips);
