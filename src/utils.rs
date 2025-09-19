@@ -82,15 +82,14 @@ pub fn get_resolver(custom_dns: Option<String>) -> Result<Resolver<TokioConnecti
             let dns_config = get_dns_config_from_ips(&dns_ips);
             let name = Name::from_str("luxbulb.org.")?;
             let resolver_config = ResolverConfig::from_parts(Some(name), vec![], dns_config);
-            return Ok(Resolver::builder_with_config(
-                resolver_config,
-                TokioConnectionProvider::default(),
+            Ok(
+                Resolver::builder_with_config(resolver_config, TokioConnectionProvider::default())
+                    .build(),
             )
-            .build());
         } else {
             // If parsing failed or no valid IPs, fallback to default
             eprintln!("Resolution using default DNS servers: 1.1.1.1");
-            return get_default_dns_config();
+            get_default_dns_config()
         }
     } else {
         // Use default Cloudflare DNS configuration
