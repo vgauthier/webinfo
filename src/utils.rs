@@ -6,7 +6,7 @@ use hickory_resolver::{
     name_server::TokioConnectionProvider,
 };
 use ip2asn::{Builder, IpAsnMap};
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::{IpAddr, SocketAddr};
 use std::str::FromStr;
 use std::{env, fs::File, io, path::Path};
 
@@ -46,18 +46,50 @@ pub async fn open_asn_db() -> Result<IpAsnMap> {
     Ok(ipasn)
 }
 
-pub fn get_resolver() -> Resolver<TokioConnectionProvider> {
-    // Resolver::builder_with_config(
-    //     ResolverConfig::cloudflare(),
-    //     TokioConnectionProvider::default(),
-    // )
-    // .build()
-    let ip: IpAddr = "1.1.1.1".parse().unwrap();
+pub fn parse_ip_list(ip_list: &str) -> Vec<IpAddr> {
+    ip_list
+        .split(',')
+        .filter_map(|s| s.trim().parse::<IpAddr>().ok())
+        .collect()
+}
+
+pub fn get_default_dns_config() -> Result<Resolver<TokioConnectionProvider>> {
+    let ip: IpAddr = "1.1.1.1".parse()?;
     let socket_addr = SocketAddr::new(ip, 53);
     let name_server_config = NameServerConfig::new(socket_addr, Protocol::Udp);
-    let name = Name::from_str("www.luxbulb.org.").unwrap();
+    let name = Name::from_str("luxbulb.org.")?;
     let resolver_config = ResolverConfig::from_parts(Some(name), vec![], vec![name_server_config]);
-    Resolver::builder_with_config(resolver_config, TokioConnectionProvider::default()).build()
+    Ok(Resolver::builder_with_config(resolver_config, TokioConnectionProvider::default()).build())
+}
+
+/// Create a DNS resolver using Cloudflare's DNS server by default
+/// or a custom DNS server if arguments is provided.
+pub fn get_resolver(custom_dns: Option<String>) -> Result<Resolver<TokioConnectionProvider>> {
+    if custom_dns.is_some() {
+        let dns_ips = parse_ip_list(&custom_dns.unwrap());
+        if dns_ips.is_empty() {
+            return Err(anyhow::anyhow!(
+                "No valid IP addresses found in custom DNS server list."
+            ));
+        } else {
+            let dns_config = dns_ips
+                .iter()
+                .map(|ip| {
+                    let socket_addr = SocketAddr::new(*ip, 53);
+                    NameServerConfig::new(socket_addr, Protocol::Udp)
+                })
+                .collect::<Vec<NameServerConfig>>();
+            let name = Name::from_str("www.luxbulb.org.")?;
+            let resolver_config = ResolverConfig::from_parts(Some(name), vec![], dns_config);
+            return Ok(Resolver::builder_with_config(
+                resolver_config,
+                TokioConnectionProvider::default(),
+            )
+            .build());
+        }
+    } else {
+        get_default_dns_config()
+    }
 }
 
 /// Break an iterator into chunks of a specified size
@@ -114,7 +146,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_resolver() {
-        let resolver = get_resolver();
+        let resolver = get_resolver(None).unwrap();
         let response = resolver.lookup_ip("example.com").await;
         assert!(response.is_ok());
     }

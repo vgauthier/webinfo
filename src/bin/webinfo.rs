@@ -33,7 +33,8 @@ async fn run(
     chunk_size: usize,
 ) -> Result<()> {
     // Initialize dns resolver
-    let resolver = get_resolver();
+    let resolver = get_resolver(None)
+        .map_err(|_| anyhow::anyhow!("Failed to create DNS resolver with default configuration"))?;
     // Wrap the ASN map in an Arc for shared ownership
     let ip2asn_map = open_asn_db()
         .await
