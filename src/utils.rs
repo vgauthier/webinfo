@@ -20,7 +20,7 @@ async fn fetch_and_save_asn_db(url: &str, path: &Path) -> Result<()> {
     let mut dest = File::create(path)?;
     io::copy(&mut response.as_ref(), &mut dest)
         .map_err(|e| anyhow::anyhow!("Failed to save ASN database: {}", e))?;
-    println!("Downloaded ASN database to {}", path.display());
+    eprintln!("Downloaded ASN database to {}", path.display());
     Ok(())
 }
 
@@ -38,9 +38,9 @@ pub async fn open_asn_db() -> Result<IpAsnMap> {
                 e.to_string()
             )
         })?;
-        println!("ASN database fetched successfully.");
+        eprintln!("ASN database fetched successfully.");
     }
-    println!("Loading ASN database from {}", path.display());
+    eprintln!("Loading ASN database from {}", path.display());
     // Build the IpAsnMap lookup table
     let ipasn = Builder::new().from_path(path)?.build()?;
     Ok(ipasn)

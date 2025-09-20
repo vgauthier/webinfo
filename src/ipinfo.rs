@@ -49,7 +49,7 @@ impl IpInfo {
         let hostname = extract_hostname(&target.origin)
             .ok_or_else(|| anyhow::anyhow!("Invalid hostname: {}", target.origin))?;
         // extract TLD
-        let domain = extract_domain(&target.origin).ok();
+        let domain = extract_domain(&hostname).ok();
         if domain.is_none() {
             eprintln!(
                 "Warning: Could not extract domain from hostname: {}",
