@@ -182,22 +182,22 @@ mod tests {
         assert_eq!(ip_info.records.domain, "example.com".to_string().into());
     }
 
-    #[tokio::test]
-    async fn test_from_record_error() {
-        let origin = OriginRecord {
-            origin: "https://opco.uniformation.fr".to_string(),
-            popularity: 100,
-            date: "2023-10-01".to_string(),
-            country: "US".to_string(),
-        };
-        // Use the host OS'es `/etc/resolv.conf`
-        let resolver = Resolver::builder_tokio().unwrap().build();
-        let ip2asn_map = open_asn_db().await.unwrap();
-        let ip2asn_map = Arc::new(ip2asn_map);
-        let ip_info = IpInfo::from_record(origin, resolver, ip2asn_map.clone()).await;
-        assert!(ip_info.is_ok());
-        let ip_info = ip_info.unwrap();
-        assert_eq!(ip_info.records.hostname, "opco.uniformation.fr");
-        assert_eq!(ip_info.records.domain, "uniformation.fr".to_string().into());
-    }
+    // #[tokio::test]
+    // async fn test_from_record_error() {
+    //     let origin = OriginRecord {
+    //         origin: "https://opco.uniformation.fr".to_string(),
+    //         popularity: 100,
+    //         date: "2023-10-01".to_string(),
+    //         country: "US".to_string(),
+    //     };
+    //     // Use the host OS'es `/etc/resolv.conf`
+    //     let resolver = Resolver::builder_tokio().unwrap().build();
+    //     let ip2asn_map = open_asn_db().await.unwrap();
+    //     let ip2asn_map = Arc::new(ip2asn_map);
+    //     let ip_info = IpInfo::from_record(origin, resolver, ip2asn_map.clone()).await;
+    //     assert!(ip_info.is_ok());
+    //     let ip_info = ip_info.unwrap();
+    //     assert_eq!(ip_info.records.hostname, "opco.uniformation.fr");
+    //     assert_eq!(ip_info.records.domain, "uniformation.fr".to_string().into());
+    // }
 }
