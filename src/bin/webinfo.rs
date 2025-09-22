@@ -2,7 +2,14 @@ use anyhow::Result;
 use clap::Parser;
 use futures::future::try_join_all;
 use itertools::izip;
-use std::{fs::File, iter::repeat_with, path::PathBuf, sync::Arc};
+use std::{
+    fs::File,
+    iter::repeat_with,
+    path::PathBuf,
+    sync::Arc,
+    time::{Duration, SystemTime},
+};
+use tokio::time::timeout;
 use tokio::{sync::mpsc, task::spawn};
 use webinfo::utils::chunked;
 
@@ -45,6 +52,7 @@ async fn run(
         .map_err(|e| anyhow::anyhow!("Failed to open ASN database: {}", e))?;
     let ip2asn_map = Arc::new(ip2asn_map);
     // Implement chunking to limit the number of concurrent tasks
+    let mut num_records_processed = 0;
     for chunk in chunked(rdr.deserialize::<OriginRecord>(), chunk_size) {
         // store all task handles
         let mut handles = Vec::new();
@@ -53,6 +61,7 @@ async fn run(
         let ip2asn_iter = repeat_with(|| ip2asn_map.clone()).take(chunk.len());
         let tx_iter = repeat_with(|| tx.clone()).take(chunk.len());
         // Process each record in the chunk
+        let now = SystemTime::now();
         for (record, r, ip2asn, sender) in izip!(chunk, resolver_iter, ip2asn_iter, tx_iter) {
             let record = match record {
                 Ok(record) => record,
@@ -64,8 +73,16 @@ async fn run(
             // Spawn a task
             let handle = spawn(async move {
                 // Perform the query
-                let ip_info = IpInfo::from_record(record, r, ip2asn).await;
-                // Send the result through the channel
+                let ip_info = timeout(
+                    Duration::from_secs(120),
+                    IpInfo::from_record(record, r, ip2asn),
+                )
+                .await;
+                let ip_info = match ip_info {
+                    Ok(Ok(info)) => Ok(info),
+                    Ok(Err(e)) => Err(e),
+                    Err(_) => Err(anyhow::anyhow!("Operation timed out")),
+                };
                 let _ = sender.send(ip_info).await;
             });
             handles.push(handle);
@@ -73,6 +90,14 @@ async fn run(
 
         // Wait for the current batch of tasks to complete
         let _ = try_join_all(handles).await?;
+
+        // Optional: brief pause to avoid overwhelming resources
+        num_records_processed += chunk_size;
+        let elapsed = now.elapsed().unwrap_or(Duration::new(0, 0));
+        eprintln!(
+            "Total Processed Records: {} => processes batch of {} records in {:.2?}",
+            num_records_processed, chunk_size, elapsed
+        );
     }
     Ok(())
 }

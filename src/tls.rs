@@ -151,4 +151,13 @@ mod tests {
         assert_eq!(cert_info.organization(), "GlobalSign nv-sa");
         assert_eq!(cert_info.country(), "BE");
     }
+
+    #[test]
+    fn test_retrive_cert_info_invalid_domain() {
+        let domain = "opco.uniformation.fr";
+        let cert_info = retrive_cert_info(domain);
+        assert!(cert_info.is_ok());
+        let cert_info = cert_info.unwrap();
+        print!("{:?}", cert_info);
+    }
 }
