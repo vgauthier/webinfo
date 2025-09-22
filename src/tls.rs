@@ -156,8 +156,8 @@ mod tests {
     fn test_retrive_cert_info_invalid_domain() {
         let domain = "opco.uniformation.fr";
         let cert_info = retrive_cert_info(domain);
-        assert!(cert_info.is_ok());
-        let cert_info = cert_info.unwrap();
-        print!("{:?}", cert_info);
+        assert!(cert_info.is_err());
+        //let cert_info = cert_info.unwrap();
+        //print!("{:?}", cert_info);
     }
 }
