@@ -4,7 +4,6 @@ use hickory_resolver::{Resolver, name_server::ConnectionProvider};
 use ip2asn::IpAsnMap;
 use serde::{Deserialize, Serialize};
 use std::{net::IpAddr, sync::Arc};
-use tokio::time::{Duration, timeout};
 use url::Url;
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -47,13 +46,10 @@ impl IpInfo {
         ip2asn_map: Arc<IpAsnMap>,
     ) -> Result<IpInfo> {
         // Parse Hostname
-        eprintln!("Processing: {}", target.origin);
         let hostname = extract_hostname(&target.origin)
             .ok_or_else(|| anyhow::anyhow!("Invalid hostname: {}", target.origin))?;
         // extract TLD
         let domain = extract_domain(&hostname).ok();
-        dbg!("Extracted domain: {:?}", &domain);
-        dbg!("Extracted hostname: {:?}", &hostname);
         if domain.is_none() {
             eprintln!(
                 "Warning: Could not extract domain from hostname: {}",
@@ -61,31 +57,16 @@ impl IpInfo {
             );
         }
         // Perform DNS lookups with timeouts
-        let ip = timeout(
-            Duration::from_secs(60),
-            dns::query_ipv4_ipv6(&hostname, &resolver),
-        );
+        let ip = dns::query_ipv4_ipv6(&hostname, &resolver);
         // CNAME lookup with timeout
-        let cname = timeout(
-            Duration::from_secs(60),
-            dns::query_cname(&hostname, &resolver),
-        );
+        let cname = dns::query_cname(&hostname, &resolver);
+        let (ip, cname) = tokio::join!(ip, cname);
+        // NS lookup with timeout if domain is available
         let ns = match &domain {
-            Some(domain) => {
-                let ns = timeout(
-                    Duration::from_secs(60),
-                    dns::query_ns(domain, &resolver, &ip2asn_map),
-                );
-                ns.await.ok().flatten()
-            }
+            Some(domain) => dns::query_ns(domain, &resolver, &ip2asn_map).await,
             None => None,
         };
-        let (ip, cname) = tokio::join!(ip, cname);
-        let ip = ip.ok().flatten();
-        let cname = cname.ok().flatten();
-        dbg!("Resolved IPs: {:?}", &ip);
-        dbg!("Resolved CNAMEs: {:?}", &cname);
-        dbg!("Resolved NS: {:?}", &ns);
+
         // ASN lookup
         let asn = if let Some(ips) = &ip {
             asn::lookup_ip(ips, &ip2asn_map)
@@ -93,12 +74,11 @@ impl IpInfo {
             None
         };
         // Retrieve TLS certificate info if the URL scheme is HTTPS
-        let tls = if target.origin.contains("https://") {
-            tls::retrive_cert_info(&hostname).ok()
-        } else {
-            None
-        };
-        eprintln!("Finished processing: {}", target.origin);
+        // let tls = if target.origin.contains("https://") {
+        //     tls::retrive_cert_info(&hostname).ok()
+        // } else {
+        //     None
+        // };
         Ok(IpInfo {
             origin: target.clone(),
             records: IpInfoRecord {
@@ -108,7 +88,7 @@ impl IpInfo {
                 ns,
                 ip,
                 asn,
-                tls,
+                tls: None, //tls
             },
         })
     }
