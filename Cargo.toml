@@ -19,7 +19,7 @@ hickory-resolver = "0.25.2"
 ip2asn = { version = "0.1.2", features = ["fetch"] }
 ip_network = { version = "0.4.1", features = ["serde"] }
 itertools = "0.14.0"
-psl = "2.1.140"
+publicsuffix2 = "0.5.2"
 reqwest = "0.12.23"
 rustls = "0.23.31"
 serde = { version = "1.0.219", features = ["derive"] }

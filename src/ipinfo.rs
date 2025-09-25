@@ -2,6 +2,7 @@ use super::{asn, asn::Asn, dns, tls};
 use anyhow::Result;
 use hickory_resolver::{Resolver, name_server::ConnectionProvider};
 use ip2asn::IpAsnMap;
+use publicsuffix2::{List, MatchOpts, TypeFilter};
 use serde::{Deserialize, Serialize};
 use std::{net::IpAddr, sync::Arc};
 use url::Url;
@@ -49,7 +50,7 @@ impl IpInfo {
         let hostname = extract_hostname(&target.origin)
             .ok_or_else(|| anyhow::anyhow!("Invalid hostname: {}", target.origin))?;
         // extract TLD
-        let domain = extract_domain(&hostname).ok();
+        let domain = extract_domain(&hostname);
         if domain.is_none() {
             eprintln!(
                 "Warning: Could not extract domain from hostname: {}",
@@ -102,15 +103,32 @@ fn extract_hostname(url: &str) -> Option<String> {
     }
 }
 
-fn extract_domain(url: &str) -> Result<String> {
-    // Count the number of dots in the URL to handle single-label domains
-    let ndots = url.chars().filter(|c| *c == '.').count();
-    if ndots == 1 {
-        return Ok(url.to_owned());
+fn extract_domain(hostname: &str) -> Option<String> {
+    // You can filter to only use ICANN section rules.
+    let opts_icann_only = MatchOpts {
+        types: TypeFilter::Icann,
+        ..Default::default()
+    };
+    let list = List::default();
+    let parts = list.split(hostname, opts_icann_only);
+    if let Some(parts) = parts {
+        match parts.sll.as_deref() {
+            None => {
+                eprintln!(
+                    "Warning: Could not parse domain from hostname: {}",
+                    hostname
+                );
+                None
+            }
+            Some(_) => parts.sld.as_deref().map(|s| s.to_string()),
+        }
+    } else {
+        eprintln!(
+            "Warning: Could not parse domain from hostname: {}",
+            hostname
+        );
+        None
     }
-    let domain = psl::domain_str(url)
-        .ok_or_else(|| anyhow::anyhow!("Failed to parse domain from URL: {}", url))?;
-    Ok(domain.to_owned())
 }
 
 #[cfg(test)]
@@ -128,19 +146,31 @@ mod tests {
     #[test]
     fn test_extract_domain() {
         let url = "www.example.co.uk";
-        let domain = extract_domain(url).unwrap();
-        assert_eq!(domain, "example.co.uk".to_string());
+        let domain = extract_domain(url);
+        assert_eq!(domain, Some("example.co.uk".to_string()));
 
         let url = "carrd.co";
-        let domain = extract_domain(url).unwrap();
-        assert_eq!(domain, "carrd.co".to_string());
+        let domain = extract_domain(url);
+        assert_eq!(domain, Some("carrd.co".to_string()));
+
+        let url = "phpmyadmin.hosting.ovh.net";
+        let domain = extract_domain(url);
+        assert_eq!(domain, Some("ovh.net".to_string()));
+
+        let url = "s3.amazonaws.com";
+        let domain = extract_domain(url);
+        assert_eq!(domain, Some("amazonaws.com".to_string()));
+
+        let url = "senpai-stream.cam";
+        let domain = extract_domain(url);
+        assert_eq!(domain, Some("senpai-stream.cam".to_string()));
     }
 
     #[test]
     fn test_extract_domain_invalid() {
         let url = "invalid_domain";
         let domain = extract_domain(url);
-        assert!(domain.is_err());
+        assert!(domain.is_none());
     }
 
     #[tokio::test]
