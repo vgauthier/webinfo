@@ -56,11 +56,7 @@ async fn run(
     let ip2asn_map = Arc::new(ip2asn_map);
     // Implement chunking to limit the number of concurrent tasks
     let bar = ProgressBar::new(total_lines as u64);
-    bar.set_style(
-        ProgressStyle::with_template("[{bar:50.cyan/blue}] {msg}")
-            .unwrap()
-            .progress_chars("= "),
-    );
+    bar.set_style(ProgressStyle::with_template("[{bar:50.cyan/blue}] {msg}")?.progress_chars("= "));
     let mut progress = 0;
     for chunk in chunked(rdr.deserialize::<OriginRecord>(), chunk_size) {
         // store all task handles
@@ -100,8 +96,8 @@ async fn run(
         progress += chunk_size;
         bar.set_message(format!(
             "{}/{}, {} records processed in {:.2} seconds",
-            HumanCount(progress.try_into().unwrap()),
-            HumanCount(total_lines.try_into().unwrap()),
+            HumanCount(progress.try_into()?),
+            HumanCount(total_lines.try_into()?),
             chunk_size,
             now.elapsed().unwrap().as_secs_f64()
         ));
