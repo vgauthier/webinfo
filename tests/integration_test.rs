@@ -36,7 +36,7 @@ fn process_csv_file_with_bad_hostname() -> Result<(), Box<dyn std::error::Error>
     cmd.arg("--csv").arg(file.path());
     cmd.assert()
         .success()
-        .stdout(predicate::str::contains("\"hostname\": \"www.free.fr\""));
+        .stderr(predicate::str::contains("Error processing record"));
     Ok(())
 }
 

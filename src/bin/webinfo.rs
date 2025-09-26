@@ -71,7 +71,7 @@ async fn run(
             let record = match record {
                 Ok(record) => record,
                 Err(e) => {
-                    eprintln!("Error processing record: {}", e);
+                    eprintln!("{}", e);
                     continue;
                 }
             };
@@ -115,7 +115,7 @@ fn handle_result(mut rx: mpsc::Receiver<Result<webinfo::IpInfo>>) {
                     print!("{}", serde_json::to_string_pretty(&info).unwrap());
                     println!(",")
                 }
-                Err(e) => eprintln!("Error when processing record: {}", e),
+                Err(e) => eprintln!("{}", e),
             }
         }
     });
@@ -135,8 +135,7 @@ async fn main() -> Result<()> {
         csv_path, line_count
     );
     // open the CSV file
-    let rdr = csv::Reader::from_path(&csv_path)
-        .map_err(|e| anyhow::anyhow!("Failed to open CSV file: {}", e))?;
+    let rdr = csv::Reader::from_path(&csv_path)?;
 
     // create a channel to communicate results
     let (tx, rx) = mpsc::channel::<Result<webinfo::IpInfo>>(cli.chunk_size);
