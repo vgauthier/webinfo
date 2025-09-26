@@ -10,7 +10,7 @@ use webinfo::utils::chunked;
 fn count_lines(path: &str) -> Result<usize> {
     let file = File::open(path).map_err(|e| anyhow::anyhow!("Failed to open CSV file: {}", e))?;
     let mut lines = std::io::BufReader::new(file).lines();
-    // Set breakpoint on the next line, pull the drive, then continue
+    // count lines using try_fold to handle potential errors
     let count = lines.try_fold(0, |acc, line| line.map(|_| acc + 1))?;
     Ok(count)
 }
@@ -151,4 +151,16 @@ async fn main() -> Result<()> {
     // process chunk_size records concurrently
     run(rdr, tx, cli.chunk_size, line_count, cli.dns).await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_count_lines() {
+        let test_file_path = "./data/test-10k.csv";
+        let line_count = count_lines(test_file_path).unwrap();
+        assert_eq!(line_count, 10000);
+    }
 }
