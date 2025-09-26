@@ -7,8 +7,9 @@ use std::{fs::File, io::BufRead, iter::repeat_with, path::PathBuf, sync::Arc, ti
 use tokio::{sync::mpsc, task::spawn};
 use webinfo::utils::chunked;
 
-fn count_lines(path: &str) -> Result<usize, std::io::Error> {
-    let mut lines = std::io::BufReader::new(File::open(&path)?).lines();
+fn count_lines(path: &str) -> Result<usize> {
+    let file = File::open(path).map_err(|e| anyhow::anyhow!("Failed to open CSV file: {}", e))?;
+    let mut lines = std::io::BufReader::new(file).lines();
     // Set breakpoint on the next line, pull the drive, then continue
     let count = lines.try_fold(0, |acc, line| line.map(|_| acc + 1))?;
     Ok(count)
@@ -130,7 +131,7 @@ async fn main() -> Result<()> {
     let csv_path = cli.csv;
     let csv_path_str = csv_path
         .to_str()
-        .ok_or_else(|| anyhow::anyhow!("Invalid CSV path"))?;
+        .ok_or_else(|| anyhow::anyhow!("Failed to convert CSV path to string"))?;
     let line_count = count_lines(csv_path_str)?;
 
     eprintln!(
