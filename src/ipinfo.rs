@@ -52,10 +52,10 @@ impl IpInfo {
         // extract TLD
         let domain = extract_domain(&hostname);
         if domain.is_none() {
-            eprintln!(
-                "Warning: Could not extract domain from hostname: {}",
+            return Err(anyhow::anyhow!(
+                "Could not extract domain from hostname: {}",
                 hostname
-            );
+            ));
         }
         // Perform DNS lookups with timeouts
         let ip = dns::query_ipv4_ipv6(&hostname, &resolver);
@@ -190,6 +190,22 @@ mod tests {
         let ip_info = ip_info.unwrap();
         assert_eq!(ip_info.records.hostname, "www.example.com");
         assert_eq!(ip_info.records.domain, "example.com".to_string().into());
+    }
+
+    #[tokio::test]
+    async fn test_from_record_with_bad_hostname() {
+        let origin = OriginRecord {
+            origin: "https://www.example.toto".to_string(),
+            popularity: 100,
+            date: "2023-10-01".to_string(),
+            country: "US".to_string(),
+        };
+        // Use the host OS'es `/etc/resolv.conf`
+        let resolver = Resolver::builder_tokio().unwrap().build();
+        let ip2asn_map = open_asn_db().await.unwrap();
+        let ip2asn_map = Arc::new(ip2asn_map);
+        let ip_info = IpInfo::from_record(origin, resolver, ip2asn_map.clone()).await;
+        assert!(ip_info.is_err());
     }
 
     // #[tokio::test]
