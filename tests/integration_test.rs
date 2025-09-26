@@ -28,6 +28,19 @@ fn process_csv_file() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
+fn process_csv_file_with_bad_hostname() -> Result<(), Box<dyn std::error::Error>> {
+    let file = assert_fs::NamedTempFile::new("sample.txt")?;
+    file.write_str("origin,popularity,date,country\nhttps://www.free.fr,1000,2025-08-28,FR\nhttps://www.example.toto,1000,2025-08-28,FR")?;
+
+    let mut cmd = Command::cargo_bin("webinfo")?;
+    cmd.arg("--csv").arg(file.path());
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("\"hostname\": \"www.free.fr\""));
+    Ok(())
+}
+
+#[test]
 fn process_csv_file_err() -> Result<(), Box<dyn std::error::Error>> {
     let file = assert_fs::NamedTempFile::new("sample.txt")?;
     file.write_str(

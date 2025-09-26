@@ -48,7 +48,7 @@ impl IpInfo {
     ) -> Result<IpInfo> {
         // Parse Hostname
         let hostname = extract_hostname(&target.origin)
-            .ok_or_else(|| anyhow::anyhow!("Invalid hostname: {}", target.origin))?;
+            .map_err(|_| anyhow::anyhow!("Invalid hostname: {}", target.origin))?;
         // extract TLD
         let domain = extract_domain(&hostname);
         if domain.is_none() {
@@ -95,11 +95,20 @@ impl IpInfo {
     }
 }
 
-fn extract_hostname(url: &str) -> Option<String> {
+fn extract_hostname(url: &str) -> Result<String> {
+    let match_opt = MatchOpts {
+        strict: true,
+        ..Default::default()
+    };
+    let list = List::default();
+    let tld = list.tld(url, match_opt);
+    if tld.is_none() {
+        return Err(anyhow::anyhow!("Invalid TLD in URL: {}", url));
+    }
     let parsed_url = Url::parse(url).ok();
     match parsed_url {
-        Some(parsed_url) => Some(parsed_url.host_str()?.to_string()),
-        None => None,
+        Some(parsed_url) => Ok(parsed_url.host_str().unwrap_or("").to_string()),
+        None => Err(anyhow::anyhow!("Failed to parse URL: {}", url)),
     }
 }
 
@@ -138,9 +147,17 @@ mod tests {
 
     #[test]
     fn test_extract_hostname() {
-        let url = "https://www.example.com/path?query=param";
+        let url = "https://www.example.com";
         let hostname = extract_hostname(url);
-        assert_eq!(hostname, Some("www.example.com".to_string()));
+        assert!(hostname.is_ok());
+        assert_eq!(hostname.unwrap(), "www.example.com".to_string());
+    }
+
+    #[test]
+    fn test_extract_hostname_invalid() {
+        let url = "https://www.example.toto";
+        let hostname = extract_hostname(url);
+        assert!(hostname.is_err());
     }
 
     #[test]
@@ -169,6 +186,10 @@ mod tests {
     #[test]
     fn test_extract_domain_invalid() {
         let url = "invalid_domain";
+        let domain = extract_domain(url);
+        assert!(domain.is_none());
+
+        let url = "https://www.example.toto";
         let domain = extract_domain(url);
         assert!(domain.is_none());
     }
