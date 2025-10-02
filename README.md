@@ -16,3 +16,4 @@ Retrive information about a given webserser
 * ~~add concurency~~
 * Add option to commande line (logs)
 * Cleaup the main 
+* Add more tests
