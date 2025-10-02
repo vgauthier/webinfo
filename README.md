@@ -14,3 +14,5 @@ Retrive information about a given webserser
 * ~~Fix issue with tls~~
 * ~~print json output to stdout~~
 * ~~add concurency~~
+* Add option to commande line (logs)
+* Cleaup the main 
