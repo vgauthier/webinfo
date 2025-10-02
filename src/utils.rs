@@ -9,6 +9,7 @@ use ip2asn::{Builder, IpAsnMap};
 use std::net::{IpAddr, SocketAddr};
 use std::str::FromStr;
 use std::{env, fs::File, io, path::Path};
+use tracing::{Level, event};
 
 fn is_tmp_file_exists(filename: &str) -> bool {
     let dir = env::temp_dir();
@@ -20,7 +21,7 @@ async fn fetch_and_save_asn_db(url: &str, path: &Path) -> Result<()> {
     let mut dest = File::create(path)?;
     io::copy(&mut response.as_ref(), &mut dest)
         .map_err(|e| anyhow::anyhow!("Failed to save ASN database: {}", e))?;
-    eprintln!("Downloaded ASN database to {}", path.display());
+    event!(Level::INFO, "Downloaded ASN database to {}", path.display());
     Ok(())
 }
 
@@ -38,9 +39,9 @@ pub async fn open_asn_db() -> Result<IpAsnMap> {
                 e.to_string()
             )
         })?;
-        eprintln!("ASN database fetched successfully.");
+        event!(Level::INFO, "ASN database fetched successfully.");
     }
-    eprintln!("Loading ASN database from {}", path.display());
+    event!(Level::INFO, "Loading ASN database from {}", path.display());
     // Build the IpAsnMap lookup table
     let ipasn = Builder::new().from_path(path)?.build()?;
     Ok(ipasn)
@@ -79,7 +80,11 @@ pub fn get_resolver(custom_dns: Option<String>) -> Result<Resolver<TokioConnecti
         // change to ips_from_str to parse_ip_list
         let dns_ips = parse_ip_list(&custom_dns);
         if !dns_ips.is_empty() {
-            eprintln!("Resolution using custom DNS servers: {:?}", dns_ips);
+            event!(
+                Level::INFO,
+                "Resolution using custom DNS servers: {:?}",
+                dns_ips
+            );
             let dns_config = get_dns_config_from_ips(&dns_ips);
             let name = Name::from_str("luxbulb.org.")?;
             let resolver_config = ResolverConfig::from_parts(Some(name), vec![], dns_config);
@@ -89,12 +94,12 @@ pub fn get_resolver(custom_dns: Option<String>) -> Result<Resolver<TokioConnecti
             )
         } else {
             // If parsing failed or no valid IPs, fallback to default
-            eprintln!("Resolution using default DNS servers: 1.1.1.1");
+            event!(Level::INFO, "Resolution using default DNS servers: 1.1.1.1");
             get_default_dns_config()
         }
     } else {
         // Use default Cloudflare DNS configuration
-        eprintln!("Resolution using default DNS servers: 1.1.1.1");
+        event!(Level::INFO, "Resolution using default DNS servers: 1.1.1.1");
         get_default_dns_config()
     }
 }

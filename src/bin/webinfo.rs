@@ -5,6 +5,7 @@ use indicatif::{HumanCount, ProgressBar, ProgressStyle};
 use itertools::izip;
 use std::{fs::File, io::BufRead, iter::repeat_with, path::PathBuf, sync::Arc, time::SystemTime};
 use tokio::{sync::mpsc, task::spawn};
+use tracing::{Level, event};
 use webinfo::utils::chunked;
 
 fn count_lines(path: &str) -> Result<usize> {
@@ -71,7 +72,7 @@ async fn run(
             let record = match record {
                 Ok(record) => record,
                 Err(e) => {
-                    eprintln!("{}", e);
+                    event!(Level::ERROR, "{}", e);
                     continue;
                 }
             };
@@ -79,10 +80,6 @@ async fn run(
             let handle = spawn(async move {
                 // Perform the query
                 let ip_info = IpInfo::from_record(record, r, ip2asn).await;
-                let ip_info = match ip_info {
-                    Ok(info) => Ok(info),
-                    Err(e) => Err(anyhow::anyhow!("Error processing record: {}", e)),
-                };
                 let _ = sender.send(ip_info).await;
             });
             handles.push(handle);
@@ -115,7 +112,7 @@ fn handle_result(mut rx: mpsc::Receiver<Result<webinfo::IpInfo>>) {
                     print!("{}", serde_json::to_string_pretty(&info).unwrap());
                     println!(",")
                 }
-                Err(e) => eprintln!("{}", e),
+                Err(e) => event!(Level::ERROR, "{}", e),
             }
         }
     });
@@ -123,6 +120,18 @@ fn handle_result(mut rx: mpsc::Receiver<Result<webinfo::IpInfo>>) {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    //let timer = tracing_subscriber::fmt::time::ChronoLocal::rfc_3339();
+    let timer = tracing_subscriber::fmt::time::SystemTime::default();
+    let file_appender = tracing_appender::rolling::daily("./", "prefix.log");
+    let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
+    let subscriber = tracing_subscriber::FmtSubscriber::builder()
+        .compact()
+        .with_timer(timer)
+        .with_writer(non_blocking)
+        .with_ansi(false)
+        .finish();
+    tracing::subscriber::set_global_default(subscriber)
+        .map_err(|_| anyhow::anyhow!("Failed to set global default subscriber"))?;
     let cli = Cli::parse();
     let csv_path = cli.csv;
     let csv_path_str = csv_path
@@ -130,10 +139,13 @@ async fn main() -> Result<()> {
         .ok_or_else(|| anyhow::anyhow!("Failed to convert CSV path to string"))?;
     let line_count = count_lines(csv_path_str)?;
 
-    eprintln!(
-        "Info: Starting processing file: {:?} with {} lines",
-        csv_path, line_count
+    event!(
+        Level::INFO,
+        "Starting processing file: {:?} with {} lines",
+        csv_path,
+        line_count
     );
+
     // open the CSV file
     let rdr = csv::Reader::from_path(&csv_path)?;
 

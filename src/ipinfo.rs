@@ -5,6 +5,7 @@ use ip2asn::IpAsnMap;
 use publicsuffix2::{List, MatchOpts, TypeFilter};
 use serde::{Deserialize, Serialize};
 use std::{net::IpAddr, sync::Arc};
+use tracing::{Level, event};
 use url::Url;
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -74,12 +75,29 @@ impl IpInfo {
         } else {
             None
         };
+
         // Retrieve TLS certificate info if the URL scheme is HTTPS
-        // let tls = if target.origin.contains("https://") {
-        //     tls::retrive_cert_info(&hostname).ok()
-        // } else {
-        //     None
-        // };
+        let tls = if target.origin.contains("https://") {
+            match tls::retrive_cert_info(&hostname, ip.as_ref()) {
+                Ok(tls_info) => Some(tls_info),
+                Err(e) => {
+                    event!(
+                        Level::ERROR,
+                        "Failed to retrieve TLS info for {}: {}",
+                        hostname,
+                        e
+                    );
+                    None
+                }
+            }
+        } else {
+            event!(
+                Level::INFO,
+                "Skipping TLS retrieval for non-HTTPS URL: {}",
+                target.origin
+            );
+            None
+        };
         Ok(IpInfo {
             origin: target.clone(),
             records: IpInfoRecord {
@@ -89,7 +107,7 @@ impl IpInfo {
                 ns,
                 ip,
                 asn,
-                tls: None, //tls
+                tls, //tls
             },
         })
     }

@@ -1,3 +1,7 @@
 /target
 .DS_Store
 .idea
+dump.json
+prefix.*
+data/top-fr.csv
+data/test-err3.csv
