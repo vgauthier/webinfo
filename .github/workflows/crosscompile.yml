@@ -1,0 +1,49 @@
+name: Rust Cross-compile
+on:
+  push:
+    branches: ["main"]
+    tags:
+      - v[0–9]+\.[0–9]+\.[0–9]+
+      - v[0–9]+\.[0–9]+\.[0–9]+-rc[0–9]+
+
+env: 
+  CARGO_TERM_COLOR: always
+
+jobs:
+  cross-compile:
+    name: Cross-compile Rust project
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        toolchain:
+          - stable
+        target:
+          - x86_64-unknown-linux-gnu
+          - x86_64-unknown-linux-musl
+          - aarch64-unknown-linux-gnu
+          - aarch64-unknown-linux-musl
+          - x86_64-pc-windows-gnu
+          - x86_64-pc-windows-msvc
+          - x86_64-apple-darwin
+          - aarch64-apple-darwin
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+      - run: rustup target add ${{ matrix.target }}
+      - name: Install dependencies for cross-compilation
+        run: |
+          if [[ "${{ matrix.target }}" == *"musl"* ]]; then
+            sudo apt-get update
+            sudo apt-get install -y musl-tools
+          fi
+          if [[ "${{ matrix.target }}" == "x86_64-pc-windows-gnu" ]]; then
+            sudo apt-get update
+            sudo apt-get install -y mingw-w64
+          fi
+      - name: Build for target ${{ matrix.target }}
+        run: cargo build --release --target ${{ matrix.target }}
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: webinfo-${{ matrix.target }}  
+          path: target/${{ matrix.target }}/release/webinfo 
