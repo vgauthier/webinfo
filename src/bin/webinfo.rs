@@ -209,10 +209,7 @@ mod tests {
         )
         .unwrap();
         let mut rdr = csv::Reader::from_path(file.path()).unwrap();
-        let records = rdr
-            .deserialize::<OriginRecord>()
-            .into_iter()
-            .collect::<Vec<_>>();
+        let records = rdr.deserialize::<OriginRecord>().collect::<Vec<_>>();
         let handles =
             process_batch_of_records(records, &resolver, &ip2asn_map, &mpsc::channel(1).0);
         assert_eq!(handles.len(), 1);
