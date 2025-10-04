@@ -91,7 +91,7 @@ impl<T: ConnectionProvider> IpInfoRunner<T> {
         // ASN lookup
         if self.ip2asn_map.is_some() && ipinfo.records.ip.is_some() {
             ipinfo.records.asn = asn::lookup_ip(
-                &ipinfo.records.ip.as_ref().unwrap(),
+                ipinfo.records.ip.as_ref().unwrap(),
                 self.ip2asn_map.as_ref().unwrap(),
             );
         }
@@ -133,7 +133,7 @@ impl<T: ConnectionProvider> IpInfoRunner<T> {
 //
 //******************************************************************************
 impl IpInfo {
-    pub fn new<T: ConnectionProvider>(origin: OriginRecord) -> IpInfoRunner<T> {
+    pub fn runner<T: ConnectionProvider>(origin: OriginRecord) -> IpInfoRunner<T> {
         IpInfoRunner {
             origin,
             resolver: None,
@@ -142,7 +142,7 @@ impl IpInfo {
         }
     }
 
-    fn extract_hostname(self: &mut Self) -> Result<()> {
+    fn extract_hostname(&mut self) -> Result<()> {
         let match_opt = MatchOpts {
             strict: true,
             ..Default::default()
@@ -168,7 +168,7 @@ impl IpInfo {
         }
     }
 
-    fn extract_domain(self: &mut Self) -> Option<String> {
+    fn extract_domain(&mut self) -> Option<String> {
         // You can filter to only use ICANN section rules.
         let opts_icann_only = MatchOpts {
             types: TypeFilter::Icann,
@@ -307,7 +307,7 @@ mod tests {
         };
         // Use the host OS'es `/etc/resolv.conf`
         let resolver = Resolver::builder_tokio().unwrap().build();
-        let ip_info = IpInfo::new(origin).with_resolver(resolver).run().await;
+        let ip_info = IpInfo::runner(origin).with_resolver(resolver).run().await;
         assert!(ip_info.is_ok());
         let ip_info = ip_info.unwrap();
         assert_eq!(ip_info.records.hostname, "www.example.com");
@@ -324,7 +324,7 @@ mod tests {
         };
         // Use the host OS'es `/etc/resolv.conf`
         let resolver = Resolver::builder_tokio().unwrap().build();
-        let ip_info_result = IpInfo::new(origin).with_resolver(resolver).run().await;
+        let ip_info_result = IpInfo::runner(origin).with_resolver(resolver).run().await;
         assert!(ip_info_result.is_err());
     }
 
@@ -340,7 +340,7 @@ mod tests {
         let ip2asn_map = open_asn_db().await.unwrap();
         let ip2asn_map = Arc::new(ip2asn_map);
         let resolver = get_resolver(None).unwrap();
-        let ip_info = IpInfo::new(origin)
+        let ip_info = IpInfo::runner(origin)
             .with_resolver(resolver)
             .with_ip2asn_map(ip2asn_map)
             .with_tls()

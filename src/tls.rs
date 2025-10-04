@@ -133,7 +133,7 @@ pub fn retrive_cert_info(
         .map_err(|e| anyhow::anyhow!("Failed to create connection: {}", e))?;
 
     let sockaddr = get_socket_addrs(
-        &ip.ok_or_else(|| anyhow::anyhow!("No IP addresses provided for TLS connection"))?,
+        ip.ok_or_else(|| anyhow::anyhow!("No IP addresses provided for TLS connection"))?,
     );
     // TCP Connect to the server and perform the handshake
     let mut stream = TcpStream::connect_timeout(&sockaddr, Duration::from_millis(1000))

@@ -79,7 +79,7 @@ async fn run(
             // Spawn a task
             let handle = spawn(async move {
                 // Perform the query
-                let ip_info = IpInfo::new(record)
+                let ip_info = IpInfo::runner(record)
                     .with_resolver(r)
                     .with_ip2asn_map(ip2asn)
                     .run()
@@ -125,7 +125,7 @@ fn handle_result(mut rx: mpsc::Receiver<Result<webinfo::IpInfo>>) {
 #[tokio::main]
 async fn main() -> Result<()> {
     //let timer = tracing_subscriber::fmt::time::ChronoLocal::rfc_3339();
-    let timer = tracing_subscriber::fmt::time::SystemTime::default();
+    let timer = tracing_subscriber::fmt::time::SystemTime;
     let file_appender = tracing_appender::rolling::daily("./", "prefix.log");
     let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
     let subscriber = tracing_subscriber::FmtSubscriber::builder()
