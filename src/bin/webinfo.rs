@@ -19,6 +19,24 @@ use webinfo::{
     utils::{chunked, count_lines, get_resolver, open_asn_db},
 };
 
+fn get_writer(output: Option<PathBuf>) -> Box<dyn std::io::Write + Send> {
+    match output {
+        Some(path) => {
+            let file = File::create(path);
+            match file {
+                Err(e) => {
+                    event!(Level::ERROR, "Failed to create output file: {}", e);
+                    return Box::new(std::io::stdout());
+                }
+                Ok(file) => {
+                    return Box::new(file);
+                }
+            }
+        }
+        None => Box::new(std::io::stdout()),
+    }
+}
+
 fn process_batch_of_records(
     chunk: Vec<Result<OriginRecord, csv::Error>>,
     resolver: &Resolver<TokioConnectionProvider>,
@@ -70,6 +88,9 @@ struct Cli {
     /// Log file path
     #[arg(short = 'l', long = "logfile", default_value = "./webinfo.log")]
     logfile: PathBuf,
+    /// Optional output file path (if not provided, output to stdout)
+    #[arg(short = 'o', long = "output")]
+    output: Option<PathBuf>,
 }
 
 async fn process_all_records(
@@ -77,12 +98,13 @@ async fn process_all_records(
     chunk_size: usize,
     total_lines: usize,
     custom_dns: Option<String>,
+    output: Option<PathBuf>,
 ) -> Result<()> {
     // create a channel to communicate results
     let (tx, rx) = mpsc::channel::<Result<webinfo::IpInfo>>(chunk_size);
 
     // spawn a task to handle results
-    handle_result(rx);
+    handle_result(rx, output);
 
     // Initialize dns resolver
     let resolver = get_resolver(custom_dns)
@@ -124,15 +146,17 @@ async fn process_all_records(
 ///
 /// Handle results received from the channel and print json to stdout
 /// @param rx Receiver channel
+/// @param output Optional output file path
 ///
-fn handle_result(mut rx: mpsc::Receiver<Result<webinfo::IpInfo>>) {
+fn handle_result(mut rx: mpsc::Receiver<Result<webinfo::IpInfo>>, output: Option<PathBuf>) {
+    let mut writer = get_writer(output);
     // Handle results received from the channel
     tokio::spawn(async move {
         while let Some(result) = rx.recv().await {
             match result {
                 Ok(info) => {
-                    print!("{}", serde_json::to_string_pretty(&info).unwrap());
-                    println!(",")
+                    writeln!(writer, "{}", serde_json::to_string_pretty(&info).unwrap())
+                        .expect("Failed to write to output");
                 }
                 Err(e) => event!(Level::ERROR, "{}", e),
             }
@@ -181,7 +205,7 @@ async fn main() -> Result<()> {
     let rdr = csv::Reader::from_path(&csv_path)?;
 
     // process chunk_size records concurrently
-    process_all_records(rdr, cli.chunk_size, line_count, cli.dns).await?;
+    process_all_records(rdr, cli.chunk_size, line_count, cli.dns, cli.output).await?;
     Ok(())
 }
 
