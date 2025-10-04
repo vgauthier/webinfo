@@ -1,14 +1,18 @@
 use anyhow::Result;
-use hickory_proto::rr::domain::Name;
-use hickory_proto::xfer::Protocol;
+use hickory_proto::{rr::domain::Name, xfer::Protocol};
 use hickory_resolver::{
     Resolver, config::NameServerConfig, config::ResolverConfig,
     name_server::TokioConnectionProvider,
 };
 use ip2asn::{Builder, IpAsnMap};
-use std::net::{IpAddr, SocketAddr};
-use std::str::FromStr;
-use std::{env, fs::File, io, path::Path};
+use std::{
+    env,
+    fs::File,
+    io::{self, BufRead},
+    net::{IpAddr, SocketAddr},
+    path::Path,
+    str::FromStr,
+};
 use tracing::{Level, event};
 
 fn is_tmp_file_exists(filename: &str) -> bool {
@@ -118,6 +122,15 @@ pub fn chunked<I>(
     })
 }
 
+/// Count the number of lines in a file
+pub fn count_lines(path: &str) -> Result<usize> {
+    let file = File::open(path).map_err(|e| anyhow::anyhow!("Failed to open CSV file: {}", e))?;
+    let mut lines = std::io::BufReader::new(file).lines();
+    // count lines using try_fold to handle potential errors
+    let count = lines.try_fold(0, |acc, line| line.map(|_| acc + 1))?;
+    Ok(count)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -184,5 +197,12 @@ mod tests {
         let ip_list = "1.1.";
         let parsed_ips = parse_ip_list(ip_list);
         assert_eq!(parsed_ips.len(), 0);
+    }
+
+    #[test]
+    fn test_count_lines() {
+        let test_file_path = "./data/test-10k.csv";
+        let line_count = count_lines(test_file_path).unwrap();
+        assert_eq!(line_count, 10000);
     }
 }
