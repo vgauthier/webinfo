@@ -207,7 +207,7 @@ impl IpInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils::{get_resolver, open_asn_db};
+    use crate::utils::open_asn_db;
 
     #[test]
     fn test_extract_hostname() {
@@ -348,10 +348,6 @@ mod tests {
             .await;
         assert!(ip_info.is_ok());
         let ip_info = ip_info.unwrap();
-        // eprintln!(
-        //     "IP Info: {}",
-        //     serde_json::to_string_pretty(&ip_info).unwrap()
-        // );
         assert_eq!(ip_info.records.hostname, "www.example.com");
         assert_eq!(ip_info.records.domain, "example.com".to_string().into());
         assert!(ip_info.records.ip.is_some());
