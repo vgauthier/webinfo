@@ -243,14 +243,14 @@ mod tests {
 
     #[test]
     fn test_extract_domain() {
-        let urls = vec![
+        let urls = [
             "www.example.co.uk",
             "carrd.co",
             "phpmyadmin.hosting.ovh.net",
             "s3.amazonaws.com",
             "senpai-stream.cam",
         ];
-        let expected_domains = vec![
+        let expected_domains = [
             "example.co.uk",
             "carrd.co",
             "ovh.net",
@@ -278,7 +278,7 @@ mod tests {
 
     #[test]
     fn test_extract_domain_invalid() {
-        let bad_urls = vec!["invalid_domain", "https://www.example.toto"];
+        let bad_urls = ["invalid_domain", "https://www.example.toto"];
         for url in bad_urls {
             let mut ipinfo = IpInfo {
                 origin: OriginRecord {
