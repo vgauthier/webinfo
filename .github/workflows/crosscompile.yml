@@ -18,9 +18,7 @@ jobs:
           - stable
         target:
           - x86_64-unknown-linux-gnu
-          - x86_64-unknown-linux-musl
           - x86_64-pc-windows-gnu
-          - x86_64-pc-windows-msvc
     steps:
       - uses: actions/checkout@v4
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
@@ -28,7 +26,7 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential curl git libssl-dev pkg-config
+          sudo apt-get install -y build-essential libssl-dev pkg-config
       - name: Install dependencies for cross-compilation
         run: |
           if [[ "${{ matrix.target }}" == *"musl"* ]]; then
