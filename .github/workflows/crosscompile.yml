@@ -40,7 +40,10 @@ jobs:
       - name: Build for target ${{ matrix.target }}
         run: cargo build --release --target ${{ matrix.target }}
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: webinfo-${{ matrix.target }}  
           path: target/${{ matrix.target }}/release/webinfo 
+      - name: Publish built binary to GitHub releases
+        run: |
+          gh release create --generate-notes ./target/${{ matrix.target }}/release/webinfo
