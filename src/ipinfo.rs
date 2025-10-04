@@ -40,180 +40,265 @@ pub struct IpInfo {
     pub records: IpInfoRecord,
 }
 
-// Implement a method to create IpInfo from OriginRecord
-impl IpInfo {
-    pub async fn from_record<T: ConnectionProvider>(
-        target: OriginRecord,
-        resolver: Resolver<T>,
-        ip2asn_map: Arc<IpAsnMap>,
-    ) -> Result<IpInfo> {
-        // Parse Hostname
-        let hostname = extract_hostname(&target.origin)
-            .map_err(|_| anyhow::anyhow!("Invalid hostname: {}", target.origin))?;
-        // extract TLD
-        let domain = extract_domain(&hostname);
-        if domain.is_none() {
-            return Err(anyhow::anyhow!(
-                "Could not extract domain from hostname: {}",
-                hostname
-            ));
-        }
-        // Perform DNS lookups with timeouts
-        let ip = dns::query_ipv4_ipv6(&hostname, &resolver);
-        // CNAME lookup with timeout
-        let cname = dns::query_cname(&hostname, &resolver);
-        let (ip, cname) = tokio::join!(ip, cname);
-        // NS lookup with timeout if domain is available
-        let ns = match &domain {
-            Some(domain) => dns::query_ns(domain, &resolver, &ip2asn_map).await,
-            None => None,
+//******************************************************************************
+//
+// Builder pattern for IpInfo
+//
+//******************************************************************************
+#[derive(Debug)]
+pub struct IpInfoRunner<T: ConnectionProvider> {
+    origin: OriginRecord,
+    resolver: Option<Resolver<T>>,
+    ip2asn_map: Option<Arc<IpAsnMap>>,
+    tls: bool,
+}
+
+impl<T: ConnectionProvider> IpInfoRunner<T> {
+    pub fn with_resolver(mut self, resolver: Resolver<T>) -> Self {
+        self.resolver = Some(resolver);
+        self
+    }
+
+    pub fn with_ip2asn_map(mut self, ip2asn_map: Arc<IpAsnMap>) -> Self {
+        self.ip2asn_map = Some(ip2asn_map);
+        self
+    }
+
+    pub fn with_tls(mut self) -> Self {
+        self.tls = true;
+        self
+    }
+
+    pub async fn run(self) -> Result<IpInfo> {
+        let mut ipinfo = IpInfo {
+            origin: self.origin.clone(),
+            records: IpInfoRecord::default(),
         };
+        ipinfo.extract_hostname()?;
+
+        // Perform DNS lookups with timeouts
+        if self.resolver.is_some() {
+            // IP lookup
+            let ip =
+                dns::query_ipv4_ipv6(&ipinfo.records.hostname, self.resolver.as_ref().unwrap());
+            // CNAME lookup
+            let cname = dns::query_cname(&ipinfo.records.hostname, self.resolver.as_ref().unwrap());
+            let (ip, cname) = tokio::join!(ip, cname);
+            ipinfo.records.ip = ip;
+            ipinfo.records.cname = cname;
+        }
 
         // ASN lookup
-        let asn = if let Some(ips) = &ip {
-            asn::lookup_ip(ips, &ip2asn_map)
-        } else {
-            None
-        };
+        if self.ip2asn_map.is_some() && ipinfo.records.ip.is_some() {
+            ipinfo.records.asn = asn::lookup_ip(
+                &ipinfo.records.ip.as_ref().unwrap(),
+                self.ip2asn_map.as_ref().unwrap(),
+            );
+        }
+        // extract TLD
+        ipinfo.records.domain = ipinfo.extract_domain();
+        if ipinfo.records.domain.is_some() && self.resolver.is_some() && self.ip2asn_map.is_some() {
+            // NS lookup
+            ipinfo.records.ns = dns::query_ns(
+                ipinfo.records.domain.as_ref().unwrap(),
+                self.resolver.as_ref().unwrap(),
+                self.ip2asn_map.as_ref().unwrap(),
+            )
+            .await;
+        }
 
         // Retrieve TLS certificate info if the URL scheme is HTTPS
-        let tls = if target.origin.contains("https://") {
-            match tls::retrive_cert_info(&hostname, ip.as_ref()) {
-                Ok(tls_info) => Some(tls_info),
+        if self.tls && ipinfo.origin.origin.contains("https://") && ipinfo.records.ip.is_some() {
+            let tls_info =
+                tls::retrive_cert_info(&ipinfo.records.hostname, ipinfo.records.ip.as_ref());
+            match tls_info {
+                Ok(tls_info) => ipinfo.records.tls = Some(tls_info),
                 Err(e) => {
                     event!(
                         Level::ERROR,
                         "Failed to retrieve TLS info for {}: {}",
-                        hostname,
+                        ipinfo.records.hostname,
                         e
+                    );
+                }
+            }
+        }
+        Ok(ipinfo)
+    }
+}
+
+//******************************************************************************
+//
+// IpInfo
+//
+//******************************************************************************
+impl IpInfo {
+    pub fn new<T: ConnectionProvider>(origin: OriginRecord) -> IpInfoRunner<T> {
+        IpInfoRunner {
+            origin,
+            resolver: None,
+            ip2asn_map: None,
+            tls: false,
+        }
+    }
+
+    fn extract_hostname(self: &mut Self) -> Result<()> {
+        let match_opt = MatchOpts {
+            strict: true,
+            ..Default::default()
+        };
+        let list = List::default();
+        let tld = list.tld(&self.origin.origin, match_opt);
+        if tld.is_none() {
+            return Err(anyhow::anyhow!(
+                "Invalid TLD in URL: {}",
+                &self.origin.origin
+            ));
+        }
+        let parsed_url = Url::parse(&self.origin.origin).ok();
+        match parsed_url {
+            Some(parsed_url) => {
+                self.records.hostname = parsed_url.host_str().unwrap_or("").to_string();
+                Ok(())
+            }
+            None => Err(anyhow::anyhow!(
+                "Failed to parse URL: {}",
+                &self.origin.origin
+            )),
+        }
+    }
+
+    fn extract_domain(self: &mut Self) -> Option<String> {
+        // You can filter to only use ICANN section rules.
+        let opts_icann_only = MatchOpts {
+            types: TypeFilter::Icann,
+            ..Default::default()
+        };
+        let list = List::default();
+        let parts = list.split(&self.records.hostname, opts_icann_only);
+        if let Some(parts) = parts {
+            match parts.sll.as_deref() {
+                None => {
+                    event!(
+                        Level::WARN,
+                        "Warning: Could not parse domain from hostname: {}",
+                        &self.records.hostname
                     );
                     None
                 }
+                Some(_) => parts.sld.as_deref().map(|s| s.to_string()),
             }
         } else {
             event!(
-                Level::INFO,
-                "Skipping TLS retrieval for non-HTTPS URL: {}",
-                target.origin
+                Level::WARN,
+                "Warning: Could not parse domain from hostname: {}",
+                &self.records.hostname
             );
             None
-        };
-        Ok(IpInfo {
-            origin: target.clone(),
-            records: IpInfoRecord {
-                hostname,
-                domain,
-                cname,
-                ns,
-                ip,
-                asn,
-                tls, //tls
-            },
-        })
-    }
-}
-
-fn extract_hostname(url: &str) -> Result<String> {
-    let match_opt = MatchOpts {
-        strict: true,
-        ..Default::default()
-    };
-    let list = List::default();
-    let tld = list.tld(url, match_opt);
-    if tld.is_none() {
-        return Err(anyhow::anyhow!("Invalid TLD in URL: {}", url));
-    }
-    let parsed_url = Url::parse(url).ok();
-    match parsed_url {
-        Some(parsed_url) => Ok(parsed_url.host_str().unwrap_or("").to_string()),
-        None => Err(anyhow::anyhow!("Failed to parse URL: {}", url)),
-    }
-}
-
-fn extract_domain(hostname: &str) -> Option<String> {
-    // You can filter to only use ICANN section rules.
-    let opts_icann_only = MatchOpts {
-        types: TypeFilter::Icann,
-        ..Default::default()
-    };
-    let list = List::default();
-    let parts = list.split(hostname, opts_icann_only);
-    if let Some(parts) = parts {
-        match parts.sll.as_deref() {
-            None => {
-                eprintln!(
-                    "Warning: Could not parse domain from hostname: {}",
-                    hostname
-                );
-                None
-            }
-            Some(_) => parts.sld.as_deref().map(|s| s.to_string()),
         }
-    } else {
-        eprintln!(
-            "Warning: Could not parse domain from hostname: {}",
-            hostname
-        );
-        None
     }
 }
 
+//******************************************************************************
+//
+// Tests
+//
+//******************************************************************************
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils::open_asn_db;
+    use crate::utils::{get_resolver, open_asn_db};
 
     #[test]
     fn test_extract_hostname() {
-        let url = "https://www.example.com";
-        let hostname = extract_hostname(url);
-        assert!(hostname.is_ok());
-        assert_eq!(hostname.unwrap(), "www.example.com".to_string());
+        let mut ipinfo = IpInfo {
+            origin: OriginRecord {
+                origin: "https://www.example.com".to_string(),
+                popularity: 100,
+                date: "2023-10-01".to_string(),
+                country: "US".to_string(),
+            },
+            records: IpInfoRecord::default(),
+        };
+
+        let _ = ipinfo.extract_hostname();
+        assert_eq!(ipinfo.records.hostname, "www.example.com");
     }
 
     #[test]
     fn test_extract_hostname_invalid() {
-        let url = "https://www.example.toto";
-        let hostname = extract_hostname(url);
-        assert!(hostname.is_err());
+        let mut ipinfo = IpInfo {
+            origin: OriginRecord {
+                origin: "https://www.example.toto".to_string(),
+                popularity: 100,
+                date: "2023-10-01".to_string(),
+                country: "US".to_string(),
+            },
+            records: IpInfoRecord::default(),
+        };
+
+        let hostname_result = ipinfo.extract_hostname();
+        assert!(hostname_result.is_err());
     }
 
     #[test]
     fn test_extract_domain() {
-        let url = "www.example.co.uk";
-        let domain = extract_domain(url);
-        assert_eq!(domain, Some("example.co.uk".to_string()));
-
-        let url = "carrd.co";
-        let domain = extract_domain(url);
-        assert_eq!(domain, Some("carrd.co".to_string()));
-
-        let url = "phpmyadmin.hosting.ovh.net";
-        let domain = extract_domain(url);
-        assert_eq!(domain, Some("ovh.net".to_string()));
-
-        let url = "s3.amazonaws.com";
-        let domain = extract_domain(url);
-        assert_eq!(domain, Some("amazonaws.com".to_string()));
-
-        let url = "senpai-stream.cam";
-        let domain = extract_domain(url);
-        assert_eq!(domain, Some("senpai-stream.cam".to_string()));
+        let urls = vec![
+            "www.example.co.uk",
+            "carrd.co",
+            "phpmyadmin.hosting.ovh.net",
+            "s3.amazonaws.com",
+            "senpai-stream.cam",
+        ];
+        let expected_domains = vec![
+            "example.co.uk",
+            "carrd.co",
+            "ovh.net",
+            "amazonaws.com",
+            "senpai-stream.cam",
+        ];
+        for (url, expected) in urls.iter().zip(expected_domains.iter()) {
+            let mut ipinfo = IpInfo {
+                origin: OriginRecord {
+                    origin: url.to_string(),
+                    popularity: 100,
+                    date: "2023-10-01".to_string(),
+                    country: "US".to_string(),
+                },
+                records: IpInfoRecord {
+                    hostname: url.to_string(),
+                    ..Default::default()
+                },
+            };
+            let domain = ipinfo.extract_domain();
+            assert!(domain.is_some());
+            assert_eq!(domain.unwrap(), expected.to_string());
+        }
     }
 
     #[test]
     fn test_extract_domain_invalid() {
-        let url = "invalid_domain";
-        let domain = extract_domain(url);
-        assert!(domain.is_none());
-
-        let url = "https://www.example.toto";
-        let domain = extract_domain(url);
-        assert!(domain.is_none());
+        let bad_urls = vec!["invalid_domain", "https://www.example.toto"];
+        for url in bad_urls {
+            let mut ipinfo = IpInfo {
+                origin: OriginRecord {
+                    origin: url.to_string(),
+                    popularity: 100,
+                    date: "2023-10-01".to_string(),
+                    country: "US".to_string(),
+                },
+                records: IpInfoRecord {
+                    hostname: url.to_string(),
+                    ..Default::default()
+                },
+            };
+            let domain = ipinfo.extract_domain();
+            assert!(domain.is_none());
+        }
     }
 
     #[tokio::test]
-    async fn test_from_record() {
+    async fn test_builder_hostname_domaine() {
         let origin = OriginRecord {
             origin: "https://www.example.com".to_string(),
             popularity: 100,
@@ -222,9 +307,7 @@ mod tests {
         };
         // Use the host OS'es `/etc/resolv.conf`
         let resolver = Resolver::builder_tokio().unwrap().build();
-        let ip2asn_map = open_asn_db().await.unwrap();
-        let ip2asn_map = Arc::new(ip2asn_map);
-        let ip_info = IpInfo::from_record(origin, resolver, ip2asn_map.clone()).await;
+        let ip_info = IpInfo::new(origin).with_resolver(resolver).run().await;
         assert!(ip_info.is_ok());
         let ip_info = ip_info.unwrap();
         assert_eq!(ip_info.records.hostname, "www.example.com");
@@ -232,7 +315,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_from_record_with_bad_hostname() {
+    async fn test_builder_with_bad_hostname() {
         let origin = OriginRecord {
             origin: "https://www.example.toto".to_string(),
             popularity: 100,
@@ -241,28 +324,38 @@ mod tests {
         };
         // Use the host OS'es `/etc/resolv.conf`
         let resolver = Resolver::builder_tokio().unwrap().build();
-        let ip2asn_map = open_asn_db().await.unwrap();
-        let ip2asn_map = Arc::new(ip2asn_map);
-        let ip_info = IpInfo::from_record(origin, resolver, ip2asn_map.clone()).await;
-        assert!(ip_info.is_err());
+        let ip_info_result = IpInfo::new(origin).with_resolver(resolver).run().await;
+        assert!(ip_info_result.is_err());
     }
 
-    // #[tokio::test]
-    // async fn test_from_record_error() {
-    //     let origin = OriginRecord {
-    //         origin: "https://opco.uniformation.fr".to_string(),
-    //         popularity: 100,
-    //         date: "2023-10-01".to_string(),
-    //         country: "US".to_string(),
-    //     };
-    //     // Use the host OS'es `/etc/resolv.conf`
-    //     let resolver = Resolver::builder_tokio().unwrap().build();
-    //     let ip2asn_map = open_asn_db().await.unwrap();
-    //     let ip2asn_map = Arc::new(ip2asn_map);
-    //     let ip_info = IpInfo::from_record(origin, resolver, ip2asn_map.clone()).await;
-    //     assert!(ip_info.is_ok());
-    //     let ip_info = ip_info.unwrap();
-    //     assert_eq!(ip_info.records.hostname, "opco.uniformation.fr");
-    //     assert_eq!(ip_info.records.domain, "uniformation.fr".to_string().into());
-    // }
+    #[tokio::test]
+    async fn test_builder() {
+        let origin = OriginRecord {
+            origin: "https://www.example.com".to_string(),
+            popularity: 100,
+            date: "2023-10-01".to_string(),
+            country: "US".to_string(),
+        };
+        // Use the host OS'es `/etc/resolv.conf`
+        let ip2asn_map = open_asn_db().await.unwrap();
+        let ip2asn_map = Arc::new(ip2asn_map);
+        let resolver = get_resolver(None).unwrap();
+        let ip_info = IpInfo::new(origin)
+            .with_resolver(resolver)
+            .with_ip2asn_map(ip2asn_map)
+            .with_tls()
+            .run()
+            .await;
+        assert!(ip_info.is_ok());
+        let ip_info = ip_info.unwrap();
+        // eprintln!(
+        //     "IP Info: {}",
+        //     serde_json::to_string_pretty(&ip_info).unwrap()
+        // );
+        assert_eq!(ip_info.records.hostname, "www.example.com");
+        assert_eq!(ip_info.records.domain, "example.com".to_string().into());
+        assert!(ip_info.records.ip.is_some());
+        assert!(ip_info.records.cname.is_some());
+        assert!(ip_info.records.tls.is_some());
+    }
 }

@@ -79,7 +79,11 @@ async fn run(
             // Spawn a task
             let handle = spawn(async move {
                 // Perform the query
-                let ip_info = IpInfo::from_record(record, r, ip2asn).await;
+                let ip_info = IpInfo::new(record)
+                    .with_resolver(r)
+                    .with_ip2asn_map(ip2asn)
+                    .run()
+                    .await;
                 let _ = sender.send(ip_info).await;
             });
             handles.push(handle);
