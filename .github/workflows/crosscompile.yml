@@ -45,7 +45,13 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: webinfo-${{ matrix.target }}  
-          path: target/${{ matrix.target }}/release/webinfo 
+          path: target/${{ matrix.target }}/release/webinfo
+      - uses: actions/checkout@v5
+      - name: Download release artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: webinfo-${{ matrix.target }}
+          path: ./webinfo-${{ matrix.target }}
       - name: Publish built binary to GitHub releases
         run: |
           gh release create --generate-notes ./webinfo-${{ matrix.target }}/webinfo#webinfo-${{ matrix.target }} 
