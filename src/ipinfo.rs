@@ -339,7 +339,7 @@ mod tests {
         // Use the host OS'es `/etc/resolv.conf`
         let ip2asn_map = open_asn_db().await.unwrap();
         let ip2asn_map = Arc::new(ip2asn_map);
-        let resolver = get_resolver(None).unwrap();
+        let resolver = Resolver::builder_tokio().unwrap().build();
         let ip_info = IpInfo::runner(origin)
             .with_resolver(resolver)
             .with_ip2asn_map(ip2asn_map)
