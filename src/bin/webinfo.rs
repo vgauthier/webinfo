@@ -26,11 +26,9 @@ fn get_writer(output: Option<PathBuf>) -> Box<dyn std::io::Write + Send> {
             match file {
                 Err(e) => {
                     event!(Level::ERROR, "Failed to create output file: {}", e);
-                    return Box::new(std::io::stdout());
+                    Box::new(std::io::stdout())
                 }
-                Ok(file) => {
-                    return Box::new(file);
-                }
+                Ok(file) => Box::new(file),
             }
         }
         None => Box::new(std::io::stdout()),
