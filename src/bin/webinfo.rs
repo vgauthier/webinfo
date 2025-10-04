@@ -72,7 +72,7 @@ struct Cli {
     logfile: PathBuf,
 }
 
-async fn run(
+async fn process_all_records(
     mut rdr: csv::Reader<File>,
     chunk_size: usize,
     total_lines: usize,
@@ -121,6 +121,10 @@ async fn run(
     Ok(())
 }
 
+///
+/// Handle results received from the channel and print json to stdout
+/// @param rx Receiver channel
+///
 fn handle_result(mut rx: mpsc::Receiver<Result<webinfo::IpInfo>>) {
     // Handle results received from the channel
     tokio::spawn(async move {
@@ -177,7 +181,7 @@ async fn main() -> Result<()> {
     let rdr = csv::Reader::from_path(&csv_path)?;
 
     // process chunk_size records concurrently
-    run(rdr, cli.chunk_size, line_count, cli.dns).await?;
+    process_all_records(rdr, cli.chunk_size, line_count, cli.dns).await?;
     Ok(())
 }
 
