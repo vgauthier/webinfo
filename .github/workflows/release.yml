@@ -32,3 +32,65 @@ jobs:
         run: gh release create $VERSION --draft --verify-tag --title $VERSION
     outputs:
       version: ${{ env.VERSION }}
+
+  build:
+    name: build
+    needs: create-release
+    runs-on: ubuntu-latest
+    env:
+      # For some builds, we use cross to test on 32-bit and big-endian
+      # systems.
+      CARGO: cargo
+      # When CARGO is set to CROSS, this is set to `--target matrix.target`.
+      TARGET_FLAGS:
+      # When CARGO is set to CROSS, TARGET_DIR includes matrix.target.
+      TARGET_DIR: ./target
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - build: stable-x86
+          os: ubuntu-latest
+          rust: stable
+          target: i686-unknown-linux-gnu
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+      
+      - name: Install packages (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          ci/ubuntu-install-packages
+      
+      - name: Show command used for Cargo
+        shell: bash
+        run: |
+          echo "cargo command is: ${{ env.CARGO }}"
+          echo "target flag is: ${{ env.TARGET_FLAGS }}"
+          echo "target dir is: ${{ env.TARGET_DIR }}"
+
+      - name: Build release binary
+        shell: bash
+        run: |
+          ${{ env.CARGO }} build --verbose --release 
+          if [[ "${{ matrix.os }}" == windows-* ]]; then
+            bin="target/${{ matrix.target }}/release/webinfo.exe"
+          else
+            bin="target/${{ matrix.target }}/release/webinfo"
+          fi
+          echo "BIN=$bin" >> $GITHUB_ENV
+      
+      
+      
+      
+#          - name: 'release assets'
+#        run: |
+#          zip -r feedmd-win-x64.zip target/release/webinfo.exe
+#          gh release upload ${{ github.ref_name }} feedmd-win-x64.zip 
+#        env:
+#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
