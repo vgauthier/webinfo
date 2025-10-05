@@ -12,7 +12,27 @@ permissions:
   contents: write
 
 jobs:
+  create-release:
+    name: create-release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Get the release version from the tag
+        if: env.VERSION == ''
+        run: echo "VERSION=${{ github.ref_name }}" >> $GITHUB_ENV
+      - name: Show the version
+        run: |
+          echo "version is: $VERSION"
+      - name: Create GitHub release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create $VERSION --draft --verify-tag --title $VERSION
+    outputs:
+      version: ${{ env.VERSION }}
+  
   release:
+    name: release
+    needs: create-release
     strategy:
       matrix:
         platform:
@@ -40,8 +60,8 @@ jobs:
           target: ${{ matrix.platform.target }}
           args: "--locked --release"
           strip: true
-      # - name: Publish artifacts and release
-      #   uses: houseabsolute/actions-rust-release@v0
-      #   with:
-      #     executable-name: webinfo
-      #     target: ${{ matrix.platform.target }}
+      - name: Publish artifacts and release
+        uses: houseabsolute/actions-rust-release@v0
+        with:
+          executable-name: webinfo
+          target: ${{ matrix.platform.target }}
