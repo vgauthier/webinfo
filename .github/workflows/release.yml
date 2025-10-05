@@ -78,6 +78,9 @@ jobs:
           fi
           echo "BIN=$bin" >> $GITHUB_ENV
 
+      - name: Install zip
+        run: apt-get update && apt-get install -y zip
+
       - name: Release assets
         run: |
          zip -r webinfo-${{ matrix.target }}.zip target/${{ matrix.target }}/release/webinfo
