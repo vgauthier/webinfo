@@ -30,6 +30,7 @@ Options:
 
 
 ## Todo 
+
 * Fetch info about MX
 * read from gzip file
 * ~~add option to create a ip list of-- dns server~~
@@ -42,4 +43,5 @@ Options:
 * Add more tests
 
 ## License
+
 This project is licensed under the Apache License Version 2.0.
