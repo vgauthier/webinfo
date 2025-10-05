@@ -95,13 +95,13 @@ fn get_socket_addrs(dns_ips: &[IpAddr]) -> SocketAddr {
 }
 
 fn config_tls() -> Arc<rustls::ClientConfig> {
-    // let root_store = rustls::RootCertStore {
-    //     roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
-    // };
-    let mut root_store = rustls::RootCertStore::empty();
-    for cert in rustls_native_certs::load_native_certs().expect("could not load platform certs") {
-        root_store.add(cert).unwrap();
-    }
+    let root_store = rustls::RootCertStore {
+        roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
+    };
+    //let mut root_store = rustls::RootCertStore::empty();
+    // for cert in rustls_native_certs::load_native_certs().expect("could not load platform certs") {
+    //     root_store.add(cert).unwrap();
+    // }
     let config = rustls::ClientConfig::builder()
         .with_root_certificates(root_store)
         .with_no_client_auth();
