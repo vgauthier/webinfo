@@ -1,4 +1,5 @@
 use anyhow::Result;
+use hickory_proto::rr::rdata::A;
 use rustls::pki_types::{CertificateDer, ServerName};
 use serde::Serialize;
 use std::{
@@ -95,6 +96,7 @@ fn get_socket_addrs(dns_ips: &[IpAddr]) -> SocketAddr {
 }
 
 fn config_tls() -> Arc<rustls::ClientConfig> {
+    let provider = Arc::new(rustls::crypto::aws_lc_rs::default_provider());
     let root_store = rustls::RootCertStore {
         roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
     };
@@ -102,9 +104,13 @@ fn config_tls() -> Arc<rustls::ClientConfig> {
     // for cert in rustls_native_certs::load_native_certs().expect("could not load platform certs") {
     //     root_store.add(cert).unwrap();
     // }
-    let config = rustls::ClientConfig::builder()
+    let config = rustls::ClientConfig::builder_with_provider(provider)
+        .with_safe_default_protocol_versions()
+        .expect("Failed to set protocol versions")
         .with_root_certificates(root_store)
         .with_no_client_auth();
+    //.with_root_certificates(root_store)
+    //.with_no_client_auth();
 
     Arc::new(config)
 }
@@ -123,6 +129,7 @@ pub fn retrive_cert_info(
     domain_name: &str,
     ip: Option<&Vec<IpAddr>>,
 ) -> Result<CertificateIssuerInfo> {
+    // setup TLS config
     let tls_config = config_tls();
     // parse domain name
     let domain = ServerName::try_from(domain_name.to_string())
