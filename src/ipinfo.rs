@@ -207,7 +207,6 @@ impl IpInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils::open_asn_db;
 
     #[test]
     fn test_extract_hostname() {
@@ -337,12 +336,9 @@ mod tests {
             country: "US".to_string(),
         };
         // Use the host OS'es `/etc/resolv.conf`
-        let ip2asn_map = open_asn_db().await.unwrap();
-        let ip2asn_map = Arc::new(ip2asn_map);
         let resolver = Resolver::builder_tokio().unwrap().build();
         let ip_info = IpInfo::runner(origin)
             .with_resolver(resolver)
-            .with_ip2asn_map(ip2asn_map)
             .with_tls()
             .run()
             .await;

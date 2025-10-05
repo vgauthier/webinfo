@@ -1,5 +1,4 @@
 use anyhow::Result;
-use hickory_proto::rr::rdata::A;
 use rustls::pki_types::{CertificateDer, ServerName};
 use serde::Serialize;
 use std::{
@@ -109,8 +108,6 @@ fn config_tls() -> Arc<rustls::ClientConfig> {
         .expect("Failed to set protocol versions")
         .with_root_certificates(root_store)
         .with_no_client_auth();
-    //.with_root_certificates(root_store)
-    //.with_no_client_auth();
 
     Arc::new(config)
 }
