@@ -32,6 +32,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Install Openssl (Linux only)
+        if: startsWith(matrix.platform.os-name, 'Linux')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libssl-dev
       - name: Build binary
         uses: houseabsolute/actions-rust-cross@v1
         with:
