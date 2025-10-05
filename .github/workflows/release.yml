@@ -60,8 +60,8 @@ jobs:
       - name: Install Rust toolchain
         run: |
           rustup update ${{ matrix.rust }} && rustup default ${{ matrix.rust }}
-          rustup target add ${{ matrix.target }}
-      
+          rustup target add --toolchain ${{ matrix.rust }} ${{ matrix.target }}
+
       - name: Show command used for Cargo
         shell: bash
         run: |
@@ -73,7 +73,7 @@ jobs:
         shell: bash
         run: |
           rustup target add ${{ matrix.target }}
-          CARGO_TARGET_DIR=./build ${{ env.CARGO }} build --verbose --release --target ${{ matrix.target }}
+          CARGO_TARGET_DIR=./build ${{ env.CARGO }} build --verbose --release --target=${{ matrix.target }}
   
       - name: Install zip
         run: sudo apt-get update && sudo apt-get install -y zip
