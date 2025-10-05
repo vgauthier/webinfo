@@ -58,7 +58,9 @@ jobs:
       - uses: actions/checkout@v5
     
       - name: Install Rust toolchain
-        run: rustup update ${{ matrix.rust }} && rustup default ${{ matrix.rust }}
+        run: |
+          rustup update ${{ matrix.rust }} && rustup default ${{ matrix.rust }}
+          rustup target add ${{ matrix.target }}
       
       - name: Show command used for Cargo
         shell: bash
