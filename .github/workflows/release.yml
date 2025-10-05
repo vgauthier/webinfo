@@ -41,10 +41,6 @@ jobs:
       # For some builds, we use cross to test on 32-bit and big-endian
       # systems.
       CARGO: cargo
-      # When CARGO is set to CROSS, this is set to `--target matrix.target`.
-      TARGET_FLAGS:
-      # When CARGO is set to CROSS, TARGET_DIR includes matrix.target.
-      TARGET_DIR: ./target
     strategy:
       fail-fast: false
       matrix:
@@ -70,20 +66,14 @@ jobs:
       - name: Build release binary
         shell: bash
         run: |
-          ${{ env.CARGO }} build --verbose --release 
-          if [[ "${{ matrix.os }}" == windows-* ]]; then
-            bin="target/${{ matrix.target }}/release/webinfo.exe"
-          else
-            bin="target/${{ matrix.target }}/release/webinfo"
-          fi
-          echo "BIN=$bin" >> $GITHUB_ENV
-
+          CARGO_TARGET_DIR=./${{ matrix.target }} ${{ env.CARGO }} build --verbose --release --target ${{ matrix.target }}
+  
       - name: Install zip
         run: sudo apt-get update && sudo apt-get install -y zip
 
       - name: Release assets
         run: |
-         zip -r webinfo-${{ matrix.target }}.zip target/${{ matrix.target }}/release/webinfo
+         zip -r webinfo-${{ matrix.target }}.zip ./${{ matrix.target }}/release/webinfo
          gh release upload ${{ github.ref_name }} webinfo-${{ matrix.target }}.zip
         env:
          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
