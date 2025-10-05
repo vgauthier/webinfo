@@ -3,6 +3,12 @@ name = "webinfo"
 version = "0.1.2"
 edition = "2024"
 license = "Apache-2.0"
+description = "A tool to gather information about a list of websites."
+repository = "https://github.com/vgauthier/webinfo"
+authors = ["Vincent Gauthier <vg@luxbulb.org>"]
+keywords = ["web", "tls", "ip", "whois", "asn", "dns", "http", "https"]
+categories = ["network-programming", "command-line-utilities", "security"]
+readme = "README.md"
 
 [[bin]]
 name = "webinfo"
