@@ -1,5 +1,5 @@
 name: release
-
+# more info: https://github.com/marketplace/actions/build-rust-projects-with-cross
 # Only do the release on x.y.z tags.
 on:
   push:
@@ -44,6 +44,10 @@ jobs:
             runs-on: macOS-latest
             target: x86_64-apple-darwin
 
+          - os-name: Windows-x86_64
+            runs-on: windows-latest
+            target: x86_64-pc-windows-msvc
+
     runs-on: ${{ matrix.platform.runs-on }}
     steps:
       - name: Checkout
@@ -65,3 +69,5 @@ jobs:
         with:
           executable-name: webinfo
           target: ${{ matrix.platform.target }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
