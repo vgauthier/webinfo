@@ -62,9 +62,9 @@ jobs:
           rustup update ${{ matrix.rust }} && rustup default ${{ matrix.rust }}
           cargo install cross
           rustup target add --toolchain ${{ matrix.rust }} ${{ matrix.target }}
-          apt-get update
-          apt-get remove --assume-yes gcc-9
-          apt-get --assume-yes install clang
+          sudo apt-get update
+          sudo apt-get remove --assume-yes gcc-9
+          sudo apt-get --assume-yes install clang
 
       - name: Build release binary
         shell: bash
