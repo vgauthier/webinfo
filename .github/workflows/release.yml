@@ -22,8 +22,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+      - run: rustup component add clippy --toolchain ${{ matrix.toolchain }}
       - name: Test 
         run: RUST_BACKTRACE=1 cargo test --verbose
+      - name: Clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
 
   create-release:
     name: create-release
