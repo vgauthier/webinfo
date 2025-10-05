@@ -77,13 +77,10 @@ jobs:
             bin="target/${{ matrix.target }}/release/webinfo"
           fi
           echo "BIN=$bin" >> $GITHUB_ENV
-      
-      
-      
-      
-#          - name: 'release assets'
-#        run: |
-#          zip -r feedmd-win-x64.zip target/release/webinfo.exe
-#          gh release upload ${{ github.ref_name }} feedmd-win-x64.zip 
-#        env:
-#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Release assets
+        run: |
+         zip -r webinfo-${{ matrix.target }}.zip target/${{ matrix.target }}/release/webinfo
+         gh release upload ${{ github.ref_name }} webinfo-${{ matrix.target }}.zip
+        env:
+         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
