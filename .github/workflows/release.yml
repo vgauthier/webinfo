@@ -67,14 +67,14 @@ jobs:
         shell: bash
         run: |
           rustup target add ${{ matrix.target }}
-          CARGO_TARGET_DIR=./${{ matrix.target }} ${{ env.CARGO }} build --verbose --release --target ${{ matrix.target }}
+          CARGO_TARGET_DIR=./build ${{ env.CARGO }} build --verbose --release --target ${{ matrix.target }}
   
       - name: Install zip
         run: sudo apt-get update && sudo apt-get install -y zip
 
       - name: Release assets
         run: |
-         zip -r webinfo-${{ matrix.target }}.zip . -i ./${{ matrix.target }}/release/webinfo
+         zip -r webinfo-${{ matrix.target }}.zip ./build/${{ matrix.target }}/release/webinfo
          gh release upload ${{ github.ref_name }} webinfo-${{ matrix.target }}.zip
         env:
          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
