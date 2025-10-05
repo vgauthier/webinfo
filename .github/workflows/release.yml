@@ -52,27 +52,23 @@ jobs:
         - build: stable-x86_64-darwin
           os: ubuntu-latest
           rust: stable
-          target: x86_64-apple-darwin
+          target: aarch64-apple-darwin
     
     steps:
       - uses: actions/checkout@v5
     
       - name: Install Rust toolchain
         run: |
-          rustup target add --toolchain ${{ matrix.rust }} ${{ matrix.target }}
           rustup update ${{ matrix.rust }} && rustup default ${{ matrix.rust }}
-          
-      - name: Show command used for Cargo
-        shell: bash
-        run: |
-          echo "cargo command is: ${{ env.CARGO }}"
-          echo "target flag is: ${{ env.TARGET_FLAGS }}"
-          echo "target dir is: ${{ env.TARGET_DIR }}"
+          cargo install cross
+          rustup target add --toolchain ${{ matrix.rust }} ${{ matrix.target }}
+          apt-get update
+          apt-get remove --assume-yes gcc-9
+          apt-get --assume-yes install clang
 
       - name: Build release binary
         shell: bash
         run: |
-          rustup target add ${{ matrix.target }}
           CARGO_TARGET_DIR=./build ${{ env.CARGO }} build --verbose --release --target ${{ matrix.target }}
   
       - name: Install zip
