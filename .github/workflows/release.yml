@@ -59,9 +59,9 @@ jobs:
     
       - name: Install Rust toolchain
         run: |
+          rustup target add --toolchain ${{ matrix.rust }} ${{ matrix.target }}
           rustup update ${{ matrix.rust }} && rustup default ${{ matrix.rust }}
-          rustup target add --toolchain ${{ matrix.target }} ${{ matrix.target }}
-
+          
       - name: Show command used for Cargo
         shell: bash
         run: |
