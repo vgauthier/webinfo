@@ -53,19 +53,12 @@ jobs:
           os: ubuntu-latest
           rust: stable
           target: i686-unknown-linux-gnu
+    
     steps:
       - uses: actions/checkout@v5
-      - name: Set up Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
-      
-      - name: Install packages (Ubuntu)
-        if: matrix.os == 'ubuntu-latest'
-        shell: bash
-        run: |
-          ci/ubuntu-install-packages
+    
+      - name: Install Rust toolchain
+        run: rustup update ${{ matrix.rust }} && rustup default ${{ matrix.rust }}
       
       - name: Show command used for Cargo
         shell: bash
