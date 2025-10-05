@@ -12,70 +12,35 @@ permissions:
   contents: write
 
 jobs:
-  # The create-release job runs purely to initialize the GitHub release itself,
-  # and names the release after the `x.y.z` tag that was pushed. It's separate
-  # from building the release so that we only create the release once.
-  create-release:
-    name: create-release
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - name: Get the release version from the tag
-        if: env.VERSION == ''
-        run: echo "VERSION=${{ github.ref_name }}" >> $GITHUB_ENV
-      - name: Show the version
-        run: |
-          echo "version is: $VERSION"
-      - name: Create GitHub release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release create $VERSION --draft --verify-tag --title $VERSION
-    outputs:
-      version: ${{ env.VERSION }}
-
-  build:
-    name: build
-    needs: create-release
-    runs-on: ubuntu-latest
-    env:
-      # For some builds, we use cross to test on 32-bit and big-endian
-      # systems.
-      CARGO: cargo
+  release:
     strategy:
-      fail-fast: false
       matrix:
-        include:
-        - build: stable-x86_64
-          os: ubuntu-latest
-          rust: stable
-          target: x86_64-unknown-linux-gnu
-        - build: stable-x86_64-darwin
-          os: ubuntu-latest
-          rust: stable
-          target: aarch64-apple-darwin
-    
+        platform:
+          - os-name: Linux-x86_64
+            runs-on: ubuntu-24.04
+            target: x86_64-unknown-linux-musl
+
+          - os-name: Linux-aarch64
+            runs-on: ubuntu-latest
+            target: aarch64-unknown-linux-musl
+
+          - os-name: macOS-x86_64
+            runs-on: macOS-latest
+            target: x86_64-apple-darwin
+
+    runs-on: ${{ matrix.platform.runs-on }}
     steps:
-      - uses: actions/checkout@v5
-    
-      - name: Install Rust toolchain
-        run: |
-          rustup update ${{ matrix.rust }} && rustup default ${{ matrix.rust }}
-          cargo update -p cc --precise 1.2.11
-          cargo install cross
-          rustup target add --toolchain ${{ matrix.rust }} ${{ matrix.target }}
-          
-
-      - name: Build release binary
-        shell: bash
-        run: |
-          CARGO_TARGET_DIR=./build ${{ env.CARGO }} build --verbose --release --target ${{ matrix.target }}
-  
-      - name: Install zip
-        run: sudo apt-get update && sudo apt-get install -y zip
-
-      - name: Release assets
-        run: |
-         zip -r webinfo-${{ matrix.target }}.zip ./build/${{ matrix.target }}/release/webinfo
-         gh release upload ${{ github.ref_name }} webinfo-${{ matrix.target }}.zip
-        env:
-         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Build binary
+        uses: houseabsolute/actions-rust-cross@v1
+        with:
+          command: build
+          target: ${{ matrix.platform.target }}
+          args: "--locked --release"
+          strip: true
+      - name: Publish artifacts and release
+        uses: houseabsolute/actions-rust-release@v0
+        with:
+          executable-name: webinfo
+          target: ${{ matrix.platform.target }}

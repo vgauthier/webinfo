@@ -38,3 +38,6 @@ x509-parser = "0.18.0"
 [dev-dependencies]
 assert_cmd = "2.0.14"
 predicates = "3.1.0"
+
+[target.aarch64-apple-darwin]
+linker = "mold"
